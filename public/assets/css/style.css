@@ -1,0 +1,65 @@
+
+:root{
+  --bg:#0e1117; --panel:#151a23; --text:#e8edf3; --muted:#b5bfca;
+  --accent:#ff723e; --border:#2a2f3a; --ok:#22c55e; --danger:#ef4444; --gray:#262c37; --gray2:#343b49;
+  --radius:16px; --gap:14px; --shadow:0 8px 28px rgba(0,0,0,.35);
+  --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,"Cascadia Mono",Consolas,"Liberation Mono","Courier New",monospace;
+}
+*{box-sizing:border-box}
+html{font-size:16px}
+body{margin:0; font-family: Inter,system-ui,Segoe UI,Roboto,Ubuntu; background:var(--bg); color:var(--text); line-height:1.45;}
+.topbar{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; background:#0b0e13; position:sticky; top:0; z-index:1000; border-bottom:1px solid rgba(255,255,255,.06);}
+.topbar h1{margin:0; font-size:clamp(1.05rem, 1.2vw + 0.9rem, 1.35rem); font-weight:800; letter-spacing:.2px;}
+.top-actions{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.hamburger-btn{display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:12px; background:#111524; border:1px solid #1f2a3a; box-shadow: var(--shadow); cursor:pointer;}
+.hamburger-btn svg{width:22px; height:22px; fill:#eaeef5;}
+.hamburger-btn:active{transform:scale(.98);}
+
+.tabs{display:flex; gap:10px; padding:12px 16px; background:#0b0e13; position:sticky; top:64px; z-index:900}
+.tab{background:#131722; color:#eef2f6; border:1px solid #1f2937; border-radius:999px; padding:10px 14px; cursor:pointer; font-weight:600;}
+.tab.active{outline:2px solid var(--accent);}
+.tab-panel{display:none; padding:16px;}
+.tab-panel.active{display:block;}
+
+.toolbar{display:flex; gap:8px; margin-bottom:12px;}
+.search{flex:1; background:#0b0e13; color:#fff; border:1px solid #1f2937; border-radius:12px; padding:12px 14px; font-size:.95rem;}
+
+.grid{display:grid; gap:var(--gap); grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));}
+.card{background:var(--panel); border:1px solid #1f2937; border-radius: var(--radius); padding:16px; box-shadow: var(--shadow); position:relative;}
+.card-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;}
+.card h3{margin:0; font-size:1.05rem; font-weight:800;}
+.card p{margin:0 0 12px 0; color:var(--muted); font-size:clamp(.96rem, .3vw + .9rem, 1rem);}
+.command-input{display:flex; gap:8px; align-items:center;}
+.command-input input{flex:1; background:#0b0e13; color:#fff; border:1px solid #1f2937; padding:12px 14px; border-radius:12px; font-family:var(--mono); font-size:.95rem;}
+.copy-icon{display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:12px; background:#262c37; border:1px solid #343b49; cursor:pointer;}
+.copy-icon svg{width:22px; height:22px; fill:#d1d5db;}
+.copy-icon.ok svg{fill: var(--ok);} .copy-icon.err svg{fill: var(--danger);}
+
+.cat-grid, .doc-grid{display:grid; gap:var(--gap); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));}
+.cat-tile, .doc-tile{background:var(--panel); border:1px solid #1f2937; border-radius:18px; padding:18px; box-shadow: var(--shadow); cursor:pointer; display:flex; flex-direction:column; justify-content:center; align-items:flex-start;}
+.cat-tile h4, .doc-tile h4{margin:0 0 6px 0; font-size:1rem; font-weight:800;}
+.cat-tile small, .doc-tile small{color:#a7b0bd;}
+
+.section-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+.section-title{margin:0; font-size:1.15rem; font-weight:900;}
+.back-btn{background:#131722; color:#fff; border:1px solid #1f2937; border-radius:12px; padding:8px 12px; cursor:pointer;}
+
+/* Action bar */
+.actionbar{display:flex; gap:8px; align-items:center; margin:10px 0 14px 0;}
+.segment{display:flex; background:#0b0e13; border:1px solid #1f2937; border-radius:999px; padding:4px;}
+.segment button{background:transparent; color:#e5e7eb; border:0; padding:8px 12px; border-radius:999px; cursor:pointer; font-weight:700;}
+.segment button.active{background:var(--accent); color:#0b0e13;}
+
+/* Panneau Sommaire global (overlay) */
+.summary-panel{position:fixed; right:12px; top:calc(64px + 48px + 10px); /* topbar + tabs + marge */ width:min(360px, 90vw); max-height:65vh; overflow:auto; background:#0b0e13; border:1px solid #1f2937; border-radius:12px; box-shadow: 0 18px 50px rgba(0,0,0,.55); z-index:10000;}
+.summary-panel[hidden]{display:none;}
+.summary-head{display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #1f2937;}
+.summary-close{background:transparent; color:#eaeef5; border:0; font-size:22px; cursor:pointer;}
+.summary-body{padding:8px 6px 10px;}
+.summary-body ul{list-style:none; margin:0; padding:0;}
+.summary-body li{margin:0; padding:0;}
+.summary-body a{display:block; padding:10px 12px; color:#e5e7eb; text-decoration:none; border-radius:8px;}
+.summary-body a:hover{background:#151a23;}
+.summary-body a.active{background:var(--accent); color:#0b0e13;}
+
+.site-footer{padding:16px; color:#9aa4b2; font-size:.9rem;}

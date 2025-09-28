@@ -1,0 +1,14 @@
+[
+  {
+    "cmd": "git status",
+    "description": "Voir l’état des fichiers suivis/modifiés"
+  },
+  {
+    "cmd": "git add .",
+    "description": "Ajouter tous les changements à l’index"
+  },
+  {
+    "cmd": "git commit -m \"Message\"",
+    "description": "Créer un commit avec un message"
+  }
+]

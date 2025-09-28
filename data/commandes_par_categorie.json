@@ -1,0 +1,30 @@
+{
+  "Initialisation & Configuration": [
+    {
+      "cmd": "git clone <url>",
+      "description": "Cloner un dépôt distant"
+    },
+    {
+      "cmd": "git config --global user.name \"Nom\"",
+      "description": "Nom d’utilisateur global"
+    },
+    {
+      "cmd": "git init",
+      "description": "Initialiser un dépôt"
+    }
+  ],
+  "Branches & Fusions": [
+    {
+      "cmd": "git switch -c feature/xyz",
+      "description": "Créer et basculer sur une branche"
+    },
+    {
+      "cmd": "git merge feature/xyz",
+      "description": "Fusionner une branche"
+    },
+    {
+      "cmd": "git rebase main",
+      "description": "Rebaser la branche sur main"
+    }
+  ]
+}
