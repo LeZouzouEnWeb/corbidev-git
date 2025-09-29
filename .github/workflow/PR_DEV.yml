@@ -1,0 +1,88 @@
+name: ✅ CI – Build & Tests (PR)
+
+on:
+  pull_request:
+    branches: [ develop ]   # change si besoin
+
+concurrency:
+  group: ci-pr-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: PHP / Composer / Tests
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('composer.json') != '' }}
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: 🧰 Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+          extensions: mbstring, intl, xml, ctype, json, pdo_mysql
+
+      - name: 🧱 Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: 📦 Composer install (no-dev en PR ? à toi de voir)
+        run: composer install --no-interaction --prefer-dist
+
+      - name: 🔎 PHPCS (si ruleset présent)
+        if: ${{ hashFiles('phpcs.xml*') != '' }}
+        run: |
+          vendor/bin/phpcs --version
+          vendor/bin/phpcs -q
+
+      - name: 🧪 PHPUnit (si config présente)
+        if: ${{ hashFiles('phpunit.xml*') != '' }}
+        run: |
+          vendor/bin/phpunit --version
+          vendor/bin/phpunit
+
+  node:
+    name: Node / Build / Tests
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('package.json') != '' }}
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: 🧰 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: 📦 Install deps
+        run: npm ci
+
+      - name: 🧪 Tests (si script défini)
+        if: ${{ contains(join(fromJSON('["", inputs]')), '') || always() }} # garde l'étape, mais elle ne fail que si script existe et échoue
+        run: |
+          if npm run | grep -qE ' test'; then
+            npm test --ignore-scripts=false
+          else
+            echo "No test script"
+          fi
+
+      - name: 🏗️ Build (si script défini)
+        run: |
+          if npm run | grep -qE ' build'; then
+            npm run build
+          else
+            echo "No build script"
+          fi

@@ -1,0 +1,10 @@
+[
+  {
+    "cmd": "git stash push -m \"wip\"",
+    "description": "Sauvegarder les changements en cours"
+  },
+  {
+    "cmd": "git rebase -i HEAD~5",
+    "description": "Rebase interactif sur les 5 derniers commits"
+  }
+]
