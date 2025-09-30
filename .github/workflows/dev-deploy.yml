@@ -1,37 +1,95 @@
-name: Deploy DEV
+name: 🚀 Deploy DEV (IONOS SFTP)
+
 on:
   pull_request:
     branches: [ develop ]
     types: [ closed ]
   push:
     branches: [ develop ]   # supprime ce bloc si tu veux déclencher uniquement après merge
+
 concurrency:
   group: deploy-develop
   cancel-in-progress: true
+
 jobs:
   deploy:
     if: >
       github.event_name == 'push' ||
       (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
-      - name: 🚚 Deploy via FTPS
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+
+      - name: 🔐 Préparer la clé SSH
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ secrets.SFTP_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 700 ~/.ssh
+
+      # Construit le chemin REMOTE_CHEMIN/ADRESSE_GLOBAL/dev/ADRESSE_LOCAL
+      # et normalise les / (sans double slash, pas de / en trop au début/fin)
+      - name: 🔧 Construire le chemin distant normalisé
+        id: build_path
+        env:
+          # REMOTE_CHEMIN peut être défini en Variables OU en Secrets : on gère les deux
+          REMOTE_CHEMIN_VAR: ${{ vars.REMOTE_CHEMIN }}
+          REMOTE_CHEMIN_SECRET: ${{ secrets.REMOTE_CHEMIN }}
+          ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
+          ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
+        run: |
+          set -euo pipefail
+          REMOTE_CHEMIN="${REMOTE_CHEMIN_VAR:-${REMOTE_CHEMIN_SECRET:-}}"
+          if [ -z "${REMOTE_CHEMIN:-}" ] || [ -z "${ADRESSE_GLOBAL:-}" ] || [ -z "${ADRESSE_LOCAL:-}" ]; then
+            echo "::error title=Variables manquantes::REMOTE_CHEMIN, ADRESSE_GLOBAL et ADRESSE_LOCAL doivent être définies."
+            exit 1
+          fi
+
+          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/dev/${ADRESSE_LOCAL#/}"
+          # Évite les doubles // au cas où
+          REMOTE_PATH="$(printf '%s\n' "$REMOTE_PATH" | sed -E 's:/+:/:g')"
+
+          echo "REMOTE_PATH=$REMOTE_PATH"
+          echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: 🔌 Tester la connexion SSH
+        run: |
+          set -e
+          ssh -i ~/.ssh/id_rsa -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}" \
+            'echo "SSH OK: $(hostname)"'
+
+      - name: 📁 Créer le dossier distant s’il manque
+        run: |
+          set -e
+          ssh -i ~/.ssh/id_rsa -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}" \
+            "mkdir -p '${{ steps.build_path.outputs.REMOTE_PATH }}' && echo 'OK dossier: ${{ steps.build_path.outputs.REMOTE_PATH }}'"
+
+      - name: 🚚 Deploy via SFTP (incremental)
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          port: 21
-          local-dir: .
-          server-dir: ${{ secrets.REMOTE_CHEMIN }}/${{ vars.ADRESSE_GLOBAL }}/dev/${{ vars.ADRESSE_LOCAL }}
-          state-name: .ftp-deploy-sync-state-dev.json
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USER }}
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          local_path: .
+          remote_path: ${{ steps.build_path.outputs.REMOTE_PATH }}
           exclude: |
-            **/.git*
-            **/.github/**
-            **/node_modules/**
-            **/.env*
-            **/tests/**
-            **/coverage/**
+            .git*
+            .github/**
+            node_modules/**
+            .env*
+            tests/**
+            coverage/**
+          args: "-rz"
+
+      - name: 👀 Lister le dossier déployé (debug)
+        run: |
+          set -e
+          ssh -i ~/.ssh/id_rsa -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}" \
+            "ls -la '${{ steps.build_path.outputs.REMOTE_PATH }}' || true"
