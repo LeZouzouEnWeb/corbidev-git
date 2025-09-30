@@ -1,0 +1,84 @@
+name: ✅ Pre-Merge Server Check (IONOS)
+on:
+  pull_request:
+    branches: [ develop ]
+concurrency:
+  group: server-check-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+env:
+  REMOTE_TARGET: ${{ secrets.REMOTE_CHEMIN }}${{ vars.ADRESSE_GLOBAL && format('/{0}', vars.ADRESSE_GLOBAL) || '' }}/dev
+jobs:
+  ftps:
+    name: FTPS connectivity & write probe
+    runs-on: ubuntu-latest
+    if: ${{ secrets.FTP_SERVER != '' && secrets.FTP_USERNAME != '' && secrets.FTP_PASSWORD != '' && env.REMOTE_TARGET != '' }}
+    steps:
+      - name: 🔎 Echo target
+        run: |
+          echo "Server: ${{ secrets.FTP_SERVER }}"
+          echo "Remote target: $REMOTE_TARGET/"
+      - name: 🧰 Install lftp
+        run: sudo apt-get update && sudo apt-get install -y lftp
+      - name: 🌐 DNS & Port reachability
+        run: |
+          getent hosts "${{ secrets.FTP_SERVER }}"
+          timeout 5 bash -lc "cat < /dev/null > /dev/tcp/${{ secrets.FTP_SERVER }}/21" || {
+            echo "❌ Port 21 injoignable (FTPS explicite). Si tu utilises FTPS implicite, passe sur 990.";
+            exit 1;
+          }
+      - name: 🔐 Auth & write probe (create+delete)
+        env:
+          LFTP_HOST: ${{ secrets.FTP_SERVER }}
+          LFTP_USER: ${{ secrets.FTP_USERNAME }}
+          LFTP_PASS: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          PROBE=".server-check-$(date +%s).txt"
+          echo "ok $(date -u +%FT%TZ)" > "$PROBE"
+          lftp -e "
+            set net:max-retries 1;
+            set net:timeout 10;
+            set ftp:ssl-allow true;
+            set ftp:ssl-force true;
+            set ftp:ssl-protect-data true;
+            set ssl:verify-certificate true;
+            open -u $LFTP_USER,$LFTP_PASS $LFTP_HOST;
+            cd $REMOTE_TARGET;
+            put $PROBE;
+            ls -l $PROBE;
+            rm -f $PROBE;
+            bye
+          " || { echo '❌ FTPS probe failed'; exit 1; }
+          echo '✅ FTPS OK & dossier écrivable'
+  sftp:
+    name: SFTP connectivity & write probe
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SFTP_HOST != '' && secrets.SFTP_USER != '' && secrets.SSH_PRIVATE_KEY != '' && env.REMOTE_TARGET != '' }}
+    steps:
+      - name: 🔐 Prepare SSH key & known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ secrets.SFTP_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 700 ~/.ssh
+      - name: 🌐 DNS & Port reachability
+        run: |
+          getent hosts "${{ secrets.SFTP_HOST }}"
+          timeout 5 bash -lc "cat < /dev/null > /dev/tcp/${{ secrets.SFTP_HOST }}/22" || {
+            echo "❌ Port 22 injoignable (SFTP/SSH).";
+            exit 1;
+          }
+      - name: 🔐 Auth & write probe (create+delete)
+        run: |
+          PROBE=".server-check-$(date +%s).txt"
+          echo "ok $(date -u +%FT%TZ)" > "$PROBE"
+          sftp -i ~/.ssh/id_rsa -b - "${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}" <<EOF
+cd $REMOTE_TARGET
+put $PROBE
+ls -l $PROBE
+rm $PROBE
+bye
+EOF
+          echo '✅ SFTP OK & dossier écrivable'

@@ -1,0 +1,37 @@
+name: 🚀 Deploy DEV (IONOS FTPS)
+on:
+  pull_request:
+    branches: [ develop ]
+    types: [ closed ]
+  push:
+    branches: [ develop ]   # supprime ce bloc si tu veux déclencher uniquement après merge
+concurrency:
+  group: deploy-develop
+  cancel-in-progress: true
+jobs:
+  deploy:
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+      - name: 🚚 Deploy via FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          local-dir: .
+          server-dir: ${{ secrets.REMOTE_CHEMIN }}/${{ vars.ADRESSE_GLOBAL }}/dev/
+          state-name: .ftp-deploy-sync-state-dev.json
+          exclude: |
+            **/.git*
+            **/.github/**
+            **/node_modules/**
+            **/.env*
+            **/tests/**
+            **/coverage/**
