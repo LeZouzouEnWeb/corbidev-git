@@ -1,103 +1,23 @@
+
 name: 🚀 Deploy DEV (IONOS SFTP)
 
 on:
   pull_request:
     branches: [ develop ]
-    types: [opened, synchronize, reopened, ready_for_review, closed]
+    types: [ closed ]
   push:
-    branches: [ develop ]   # supprime ce bloc si tu veux déployer uniquement après merge
+    branches: [ develop ]   # supprime ce bloc si tu veux déclencher uniquement après merge
 
 concurrency:
   group: deploy-develop
   cancel-in-progress: true
 
 jobs:
-  # ---- PR PRECHECK (bloquant) : tourne AVANT le merge, ne déploie pas ----
-  precheck:
-    name: 🔎 Precheck serveur (bloquant PR)
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 🔐 Setup SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: 🔧 Construire le chemin distant normalisé
-        id: build_path
-        env:
-          REMOTE_CHEMIN: ${{ vars.REMOTE_CHEMIN }}
-          ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
-          ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${REMOTE_CHEMIN:-}" ] || [ -z "${ADRESSE_GLOBAL:-}" ] || [ -z "${ADRESSE_LOCAL:-}" ]; then
-            echo "::error title=Variables manquantes::REMOTE_CHEMIN, ADRESSE_GLOBAL et ADRESSE_LOCAL doivent être définies (Settings » Variables)."
-            exit 1
-          fi
-          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/dev/${ADRESSE_LOCAL#/}"
-          REMOTE_PATH="$(printf '%s\n' "$REMOTE_PATH" | sed -E 's:/+:/:g')"
-          echo "REMOTE_PATH=$REMOTE_PATH"
-          echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
-
-      - name: 🔌 Tester la connexion SSH
-        run: |
-          set -e
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
-            ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} \
-            "echo 'SSH OK: ' \$(hostname)"
-
-      - name: 📁 Vérifier/créer le dossier (avec logs clairs)
-        id: ensure_dir
-        run: |
-          set -e
-          REMOTE_PATH="${{ steps.build_path.outputs.REMOTE_PATH }}"
-          # On check s'il existe, sinon on crée
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
-            ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} "\
-              if [ -d \"$REMOTE_PATH\" ]; then \
-                echo '✅ Dossier déjà présent : '$REMOTE_PATH; \
-                echo EXISTS=true > /tmp/out; \
-                echo CREATED=false >> /tmp/out; \
-              else \
-                echo '⚠️ Dossier absent, création… : '$REMOTE_PATH; \
-                if mkdir -p \"$REMOTE_PATH\"; then \
-                  echo '✅ Dossier créé : '$REMOTE_PATH; \
-                  echo EXISTS=false > /tmp/out; \
-                  echo CREATED=true >> /tmp/out; \
-                else \
-                  echo '❌ Échec création dossier : '$REMOTE_PATH; \
-                  exit 1; \
-                fi \
-              fi"
-          cat /tmp/out
-          # Export GITHUB_OUTPUT
-          while IFS='=' read -r k v; do echo "$k=$v" >> "$GITHUB_OUTPUT"; done < /tmp/out
-
-      - name: 🧾 Résumé lisible
-        run: |
-          echo "EXISTS=${{ steps.ensure_dir.outputs.EXISTS }}"
-          echo "CREATED=${{ steps.ensure_dir.outputs.CREATED }}"
-          if [ "${{ steps.ensure_dir.outputs.EXISTS }}" = "true" ]; then
-            echo "::notice title=État dossier::✅ Présent avant le job"
-          else
-            if [ "${{ steps.ensure_dir.outputs.CREATED }}" = "true" ]; then
-              echo "::notice title=État dossier::✅ Créé pendant le job"
-            else
-              echo "::error title=État dossier::❌ Inconnu (vérifiez les logs)"
-              exit 1
-            fi
-          fi
-
-  # ---- DEPLOY : tourne après merge (ou sur push direct sur develop) ----
   deploy:
-    name: 🚚 Deploy après merge
     if: >
       github.event_name == 'push' ||
       (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
-    needs: []  # indépendant; le blocage merge est assuré par 'precheck'
 
     steps:
       - uses: actions/checkout@v4
@@ -111,21 +31,51 @@ jobs:
       - name: 🔧 Construire le chemin distant normalisé
         id: build_path
         env:
-          REMOTE_CHEMIN: ${{ vars.REMOTE_CHEMIN }}
+          REMOTE_CHEMIN: ${{ secrets.REMOTE_CHEMIN }}
           ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
           ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
         run: |
           set -euo pipefail
+
+          echo "Trace> REMOTE_CHEMIN='${REMOTE_CHEMIN:-}'"
+          echo "Trace> ADRESSE_GLOBAL='${ADRESSE_GLOBAL:-}'"
+          echo "Trace> ADRESSE_LOCAL='${ADRESSE_LOCAL:-}'"
+
+          if [ -z "${REMOTE_CHEMIN:-}" ]; then
+            echo "::error title=REMOTE_CHEMIN manquant::Définis REMOTE_CHEMIN dans Settings → Secrets."
+            exit 1
+          fi
+          if [ "${REMOTE_CHEMIN}" = "/" ]; then
+            echo "::error title=REMOTE_CHEMIN invalide::REMOTE_CHEMIN ne peut pas être '/'. Mets le chemin absolu vers ton htdocs (ex: /homepages/xx/dxxxx/htdocs)."
+            exit 1
+          fi
+          if [ -z "${ADRESSE_GLOBAL:-}" ] || [ -z "${ADRESSE_LOCAL:-}" ]; then
+            echo "::error title=Variables manquantes::ADRESSE_GLOBAL et ADRESSE_LOCAL doivent être définies (Settings → Variables)."
+            exit 1
+          fi
+
           REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/dev/${ADRESSE_LOCAL#/}"
-          REMOTE_PATH="$(printf '%s\n' "$REMOTE_PATH" | sed -E 's:/+:/:g')"
-          echo "REMOTE_PATH=$REMOTE_PATH"
+          # Nettoyage pour éviter les doubles //
+          REMOTE_PATH="$(printf '%s' "$REMOTE_PATH" | sed -E 's:/+:/:g')"
+
+          echo "Trace> REMOTE_PATH construit = $REMOTE_PATH"
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: 📁 S'assurer que le dossier existe
+      - name: 🔌 Tester la connexion SSH
         run: |
           ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
             ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} \
-            "mkdir -p '${{ steps.build_path.outputs.REMOTE_PATH }}' && echo '✅ Dossier prêt: ${{ steps.build_path.outputs.REMOTE_PATH }}'"
+            "echo 'SSH OK: ' \$(hostname)"
+
+      - name: 📁 S'assurer que le dossier existe
+        run: |
+          REMOTE_PATH="${{ steps.build_path.outputs.REMOTE_PATH }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+            ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} \
+            "mkdir -p -- \"$REMOTE_PATH\" \
+             && echo '✅ Dossier prêt: ' \"$REMOTE_PATH\" \
+             && echo 'Parent:' \$(dirname \"$REMOTE_PATH\") \
+             && ls -ld \$(dirname \"$REMOTE_PATH\") || true"
 
       - name: 🚚 Deploy via SFTP (incremental)
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
