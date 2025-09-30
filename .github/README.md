@@ -12,7 +12,6 @@ Ce ZIP contient **3 workflows** prêts à l'emploi pour un hébergement mutualis
 Place ces fichiers dans ton dépôt :
 
 ```
-.yarn.lock / package-lock.json  (si présents)
 .github/
 └─ workflows/
    ├─ deploy-dev.yml
@@ -22,7 +21,7 @@ Place ces fichiers dans ton dépôt :
 
 ## Secrets & Variables à configurer (Repository Settings → Actions)
 
-### Variables (Variables → Actions → *Variables*)
+### Variables (Variables → Actions)
 - `ADRESSE_GLOBAL` : ex. `corbisier.fr`
 
 ### Secrets communs
@@ -43,25 +42,41 @@ Place ces fichiers dans ton dépôt :
 
 ## Branch protection (bloquer le merge)
 
-1. GitHub → **Settings** → **Branches** → **Branch protection rules** → `develop`  
-2. Activer **Require status checks to pass before merging**  
-3. Sélectionner comme checks requis :
-   - `PHP / Composer / Tests`
-   - `Node / Build / Tests`
-   - `FTPS connectivity & write probe` **ou** `SFTP connectivity & write probe` (selon ton mode)
+### Paramètres GitHub à activer
 
-> Note : `deploy-dev.yml` s’exécute **après merge**, donc ne peut pas être un *required check* avant merge.
+1. Aller dans **Settings → Branches → Branch protection rules → New rule**
+2. Branch name pattern : `develop`
+3. Activer :
+   - ✅ **Require a pull request before merging**
+   - ✅ **Require status checks to pass before merging**
+   - ✅ **Require conversation resolution** (optionnel mais recommandé)
+   - ✅ **Require branches to be up to date before merging** (optionnel mais recommandé)
+   - ✅ **Include administrators** (optionnel, si tu veux appliquer aux admins aussi)
+
+4. Dans la liste des checks disponibles, sélectionner comme **obligatoires** :  
+   - `PHP / Composer / Tests`  
+   - `Node / Build / Tests`  
+   - `FTPS connectivity & write probe` **ou** `SFTP connectivity & write probe` (selon ton mode serveur)  
+
+⚠️ Le job `deploy-dev.yml` s’exécute **après merge** et ne peut donc pas être utilisé comme *required check*.
+
+### Vérification
+
+Si un job n’apparaît pas encore dans la liste :
+- Ouvre une Pull Request de test vers `develop`
+- Laisse les workflows tourner une fois
+- Reviens dans les paramètres pour cocher le job
 
 ## Personnalisation
 
 - Dans `deploy-dev.yml`, supprime le bloc `push` si tu veux déclencher **uniquement après merge**.
 - Ajoute des exclusions (`exclude:`) si tu as des répertoires à ignorer.
-- Si tu utilises **FTPS implicite** chez IONOS, adapte le port à **990** et le protocole reste `ftps` (l'action supporte les deux, mais certains hébergements exigent 990).
+- Si tu utilises **FTPS implicite** chez IONOS, adapte le port à **990**.
 
 ## Dépannage rapide
 
 - **Erreur d'auth FTPS** : vérifie `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` et que le compte a accès à `REMOTE_CHEMIN`.
-- **Port injoignable** : sur FTPS explicite, le port est **21** ; sur implicite, **990**. Les jobs `server-check` testent par défaut 21.
+- **Port injoignable** : sur FTPS explicite, le port est **21** ; sur implicite, **990**.
 - **SFTP échoue** : confirme que l'offre IONOS inclut SSH et que la clé publique est bien dans `~/.ssh/authorized_keys`.
 - **Chemin cible incorrect** : la cible est `${REMOTE_CHEMIN}/${ADRESSE_GLOBAL}/dev/`
 
