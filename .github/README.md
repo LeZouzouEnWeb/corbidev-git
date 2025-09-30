@@ -23,6 +23,7 @@ Place ces fichiers dans ton dépôt :
 
 ### Variables (Variables → Actions)
 - `ADRESSE_GLOBAL` : ex. `corbisier.fr`
+- `ADRESSE_LOCAL` : ex. `web-git`
 
 ### Secrets communs
 - `REMOTE_CHEMIN` : ex. `/homepages/XX/dXXXXXXXX/htdocs`
