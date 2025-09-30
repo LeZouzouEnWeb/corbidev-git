@@ -5,7 +5,7 @@ on:
     branches: [ develop ]
     types: [ closed ]
   push:
-    branches: [ develop ]   # supprime ce bloc si tu ne veux déclencher qu’après merge
+    branches: [ develop ]   # supprime ce bloc si tu veux déclencher uniquement après merge
 
 concurrency:
   group: deploy-develop
@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
 
-      # Charge la clé dans l’agent (pour nos commandes ssh)
+      # Charge la clé dans l’agent pour nos commandes ssh (mkdir, ls, etc.)
       - name: 🔐 Setup SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -44,8 +44,11 @@ jobs:
             echo "::error title=REMOTE_CHEMIN invalide::REMOTE_CHEMIN ne peut pas être '/'."
             exit 1
           fi
+
           REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/dev/${ADRESSE_LOCAL#/}"
+          # Nettoyage pour éviter les doubles //
           REMOTE_PATH="$(printf '%s' "$REMOTE_PATH" | sed -E 's:/+:/:g')"
+
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
 
       - name: 🔌 Tester la connexion SSH
@@ -61,15 +64,18 @@ jobs:
             ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} \
             "mkdir -p -- \"$REMOTE_PATH\" && echo '✅ Dossier prêt: ' \"$REMOTE_PATH\""
 
-      # ⚠️ Normalise la clé pour wlixcc (remplace \n par vrais retours ligne)
-      - name: 🔑 Normaliser la clé privée pour SFTP action
+      # ✅ Normaliser la clé privée pour l’action SFTP (remplace \n littéraux par des retours ligne réels)
+      #    IMPORTANT: pas de quotes autour de EOF
+      - name: 🔑 Normaliser la clé privée pour l’action SFTP
         id: fixkey
         shell: bash
         run: |
+          key='${{ secrets.SSH_PRIVATE_KEY }}'
+          # Remplace les séquences \n par de vrais sauts de ligne
+          key="${key//\\n/$'\n'}"
           {
-            echo "ssh_key<<'EOF'"
-            printf '%s' "${{ secrets.SSH_PRIVATE_KEY }}" | sed 's/\\n/\n/g'
-            echo
+            echo "ssh_key<<EOF"
+            printf '%s\n' "$key"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
