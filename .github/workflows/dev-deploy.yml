@@ -54,7 +54,9 @@ jobs:
           fi
 
           REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/dev/${ADRESSE_LOCAL#/}"
+
           # Nettoyage pour éviter les doubles //
+
           REMOTE_PATH="$(printf '%s' "$REMOTE_PATH" | sed -E 's:/+:/:g')"
 
           echo "Trace> REMOTE_PATH construit = $REMOTE_PATH"
@@ -84,14 +86,7 @@ jobs:
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           local_path: .
           remote_path: ${{ steps.build_path.outputs.REMOTE_PATH }}
-          exclude: |
-            .git*
-            .github/**
-            node_modules/**
-            .env*
-            tests/**
-            coverage/**
-          args: "-rz"
+          sftpArgs: "-rz --exclude='.git*' --exclude='.github/**' --exclude='node_modules/**' --exclude='.env*' --exclude='tests/**' --exclude='coverage/**'"
 
       - name: 👀 Lister le dossier déployé (debug)
         run: |
