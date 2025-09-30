@@ -17,9 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
-    # On mappe les secrets/vars dans l'env (utilisable dans les steps)
     env:
-      REMOTE_TARGET: ${{ vars.REMOTE_TARGET || env.REMOTE_TARGET }}
+      REMOTE_CHEMIN: ${{ vars.REMOTE_CHEMIN }}
+      ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
+      ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
+
       FTP_SERVER: ${{ secrets.FTP_SERVER }}
       FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
       FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
@@ -31,12 +33,44 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # On calcule des flags "has_ftp" et "has_sftp" en sortie de step
+      - name: Build remote path
+        id: build_path
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${REMOTE_CHEMIN:-}"
+          glob="${ADRESSE_GLOBAL:-}"
+          loc="${ADRESSE_LOCAL:-}"
+
+          base="${base%/}"
+          glob="${glob#/}"; glob="${glob%/}"
+          loc="${loc#/}";   loc="${loc%/}"
+
+          path=""
+          if [[ -n "$base" ]]; then
+            path="$base"
+          fi
+          if [[ -n "$glob" ]]; then
+            path="${path}/${glob}"
+          fi
+          path="${path}/dev"
+          if [[ -n "$loc" ]]; then
+            path="${path}/${loc}"
+          fi
+
+          path="$(printf '%s' "$path" | sed 's#//*#/#g')"
+          path="${path%/}"
+
+          echo "REMOTE_TARGET resolved to: $path"
+          echo "REMOTE_TARGET=$path" >> "$GITHUB_ENV"
+
       - name: Compute available transports
         id: flags
         shell: bash
         run: |
           set -euo pipefail
+          : "${REMOTE_TARGET:?REMOTE_TARGET is empty after Build remote path step}"
+
           has_ftp=true
           for v in FTP_SERVER FTP_USERNAME FTP_PASSWORD REMOTE_TARGET; do
             if [[ -z "${!v:-}" ]]; then
@@ -51,14 +85,14 @@ jobs:
             fi
           done
 
-          echo "has_ftp=$has_ftp" >> "$GITHUB_OUTPUT"
+          echo "has_ftp=$has_ftp"  >> "$GITHUB_OUTPUT"
           echo "has_sftp=$has_sftp" >> "$GITHUB_OUTPUT"
 
           echo "Detected:"
+          echo "  REMOTE_TARGET=$REMOTE_TARGET"
           echo "  has_ftp=$has_ftp"
           echo "  has_sftp=$has_sftp"
 
-      # === FTP check (optionnel si secrets renseignés) ===
       - name: FTP list remote target
         if: ${{ steps.flags.outputs.has_ftp == 'true' }}
         shell: bash
@@ -68,10 +102,9 @@ jobs:
           curl -sS --fail \
             --user "$FTP_USERNAME:$FTP_PASSWORD" \
             "ftp://$FTP_SERVER/$REMOTE_TARGET/" \
-            | sed -n '1,60p'
+            | sed -n '1,80p'
           echo "✅ FTP reachable & target directory listable"
 
-      # === SFTP check (optionnel si secrets renseignés) ===
       - name: Setup SSH key (SFTP)
         if: ${{ steps.flags.outputs.has_sftp == 'true' }}
         shell: bash
@@ -81,7 +114,6 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_sftp
           chmod 600 ~/.ssh/id_sftp
-          # known_hosts optionnel (sécurise la connexion si tu veux)
           ssh-keyscan -T 5 "$SFTP_HOST" 2>/dev/null >> ~/.ssh/known_hosts || true
           chmod 644 ~/.ssh/known_hosts
 
@@ -94,7 +126,6 @@ jobs:
           PROBE=".server-check-$(date -u +%Y%m%dT%H%M%SZ).txt"
           echo "ok $(date -u +%FT%TZ)" > "$PROBE"
 
-          # Pas de heredoc YAML -> on pipe un batch SFTP
           printf '%s\n' \
             "cd $REMOTE_TARGET" \
             "put $PROBE" \
@@ -105,7 +136,6 @@ jobs:
 
           echo "✅ SFTP OK & remote dir writable"
 
-      # Si aucun transport n'est disponible, on échoue explicitement
       - name: Fail if no transport available
         if: ${{ steps.flags.outputs.has_ftp != 'true' && steps.flags.outputs.has_sftp != 'true' }}
         shell: bash
