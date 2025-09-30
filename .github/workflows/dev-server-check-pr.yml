@@ -3,6 +3,7 @@ name: Dev Server Check (PR)
 on:
   pull_request:
     branches: [ develop ]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -11,134 +12,58 @@ concurrency:
   group: dev-server-check-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+env:
+  REMOTE_CHEMIN: ${{ vars.REMOTE_CHEMIN }}
+  ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
+  ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
+
 jobs:
   dev-check:
-    name: Pre-merge dev server checks
+    name: Vérification connexion & dossier serveur
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    env:
-      REMOTE_CHEMIN: ${{ vars.REMOTE_CHEMIN }}
-      ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
-      ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
-
-      FTP_SERVER: ${{ secrets.FTP_SERVER }}
-      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
-      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-      SFTP_HOST: ${{ secrets.SFTP_HOST }}
-      SFTP_USER: ${{ secrets.SFTP_USER }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: CI bootstrap
+        run: echo "Dev server check bootstrap"
 
-      - name: Build remote path
-        id: build_path
-        shell: bash
+      - name: Vérifier les variables requises
         run: |
-          set -euo pipefail
-          base="${REMOTE_CHEMIN:-}"
-          glob="${ADRESSE_GLOBAL:-}"
-          loc="${ADRESSE_LOCAL:-}"
-
-          base="${base%/}"
-          glob="${glob#/}"; glob="${glob%/}"
-          loc="${loc#/}";   loc="${loc%/}"
-
-          path=""
-          if [[ -n "$base" ]]; then
-            path="$base"
-          fi
-          if [[ -n "$glob" ]]; then
-            path="${path}/${glob}"
-          fi
-          path="${path}/dev"
-          if [[ -n "$loc" ]]; then
-            path="${path}/${loc}"
-          fi
-
-          path="$(printf '%s' "$path" | sed 's#//*#/#g')"
-          path="${path%/}"
-
-          echo "REMOTE_TARGET resolved to: $path"
-          echo "REMOTE_TARGET=$path" >> "$GITHUB_ENV"
-
-      - name: Compute available transports
-        id: flags
-        shell: bash
-        run: |
-          set -euo pipefail
-          : "${REMOTE_TARGET:?REMOTE_TARGET is empty after Build remote path step}"
-
-          has_ftp=true
-          for v in FTP_SERVER FTP_USERNAME FTP_PASSWORD REMOTE_TARGET; do
-            if [[ -z "${!v:-}" ]]; then
-              has_ftp=false
+          miss=0
+          for v in REMOTE_CHEMIN ADRESSE_GLOBAL ADRESSE_LOCAL; do
+            if [ -z "${!v}" ]; then
+              echo "::error title=Variable manquante::$v n'est pas défini."
+              miss=1
+            else
+              echo "::notice title=Variable::$v=${!v}"
             fi
           done
+          [ "$miss" -eq 0 ] || exit 1
 
-          has_sftp=true
-          for v in SFTP_HOST SFTP_USER SSH_PRIVATE_KEY REMOTE_TARGET; do
-            if [[ -z "${!v:-}" ]]; then
-              has_sftp=false
-            fi
-          done
-
-          echo "has_ftp=$has_ftp"  >> "$GITHUB_OUTPUT"
-          echo "has_sftp=$has_sftp" >> "$GITHUB_OUTPUT"
-
-          echo "Detected:"
-          echo "  REMOTE_TARGET=$REMOTE_TARGET"
-          echo "  has_ftp=$has_ftp"
-          echo "  has_sftp=$has_sftp"
-
-      - name: FTP list remote target
-        if: ${{ steps.flags.outputs.has_ftp == 'true' }}
+      - name: Construire le chemin cible
+        id: path
         shell: bash
         run: |
-          set -euo pipefail
-          echo "Listing ftp://$FTP_SERVER/$REMOTE_TARGET/"
-          curl -sS --fail \
-            --user "$FTP_USERNAME:$FTP_PASSWORD" \
-            "ftp://$FTP_SERVER/$REMOTE_TARGET/" \
-            | sed -n '1,80p'
-          echo "✅ FTP reachable & target directory listable"
+          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/dev/${ADRESSE_LOCAL#/}"
+          echo "REMOTE_PATH=$REMOTE_PATH"
+          echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Setup SSH key (SFTP)
-        if: ${{ steps.flags.outputs.has_sftp == 'true' }}
-        shell: bash
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Vérifier connexion SSH
         run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_sftp
-          chmod 600 ~/.ssh/id_sftp
-          ssh-keyscan -T 5 "$SFTP_HOST" 2>/dev/null >> ~/.ssh/known_hosts || true
-          chmod 644 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo 'Connexion SSH OK'"
 
-      - name: SFTP probe (write/list/delete)
-        if: ${{ steps.flags.outputs.has_sftp == 'true' }}
-        id: sftp_probe
-        shell: bash
+      - name: Vérifier/Créer le dossier distant
         run: |
-          set -euo pipefail
-          PROBE=".server-check-$(date -u +%Y%m%dT%H%M%SZ).txt"
-          echo "ok $(date -u +%FT%TZ)" > "$PROBE"
-
-          printf '%s\n' \
-            "cd $REMOTE_TARGET" \
-            "put $PROBE" \
-            "ls -l $PROBE" \
-            "rm $PROBE" \
-            "bye" \
-          | sftp -b - -i ~/.ssh/id_sftp "${SFTP_USER}@${SFTP_HOST}"
-
-          echo "✅ SFTP OK & remote dir writable"
-
-      - name: Fail if no transport available
-        if: ${{ steps.flags.outputs.has_ftp != 'true' && steps.flags.outputs.has_sftp != 'true' }}
-        shell: bash
-        run: |
-          echo "::error title=No transport configured::Neither FTP nor SFTP credentials are set. Provide secrets or disable this check."
-          exit 1
+          REMOTE_PATH="${{ steps.path.outputs.REMOTE_PATH }}"
+          echo "Vérification du dossier : $REMOTE_PATH"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
+            if [ -d \"$REMOTE_PATH\" ]; then \
+              echo '✅ Dossier déjà présent : $REMOTE_PATH'; \
+            else \
+              echo '⚠️ Dossier absent, création en cours : $REMOTE_PATH'; \
+              mkdir -p \"$REMOTE_PATH\" && echo '✅ Dossier créé.'; \
+            fi"
