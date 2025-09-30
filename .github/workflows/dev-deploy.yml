@@ -5,7 +5,7 @@ on:
     branches: [ develop ]
     types: [ closed ]
   push:
-    branches: [ develop ]   # supprime ce bloc si tu veux déclencher uniquement après merge
+    branches: [ develop ]   # supprime ce bloc si tu ne veux déclencher qu’après merge
 
 concurrency:
   group: deploy-develop
@@ -22,6 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
 
+      # Charge la clé dans l’agent (pour nos commandes ssh)
       - name: 🔐 Setup SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -35,31 +36,16 @@ jobs:
           ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
         run: |
           set -euo pipefail
-
-          echo "Trace> REMOTE_CHEMIN='${REMOTE_CHEMIN:-}'"
-          echo "Trace> ADRESSE_GLOBAL='${ADRESSE_GLOBAL:-}'"
-          echo "Trace> ADRESSE_LOCAL='${ADRESSE_LOCAL:-}'"
-
-          if [ -z "${REMOTE_CHEMIN:-}" ]; then
-            echo "::error title=REMOTE_CHEMIN manquant::Définis REMOTE_CHEMIN dans Settings → Secrets."
+          if [ -z "${REMOTE_CHEMIN:-}" ] || [ -z "${ADRESSE_GLOBAL:-}" ] || [ -z "${ADRESSE_LOCAL:-}" ]; then
+            echo "::error title=Variables manquantes::REMOTE_CHEMIN (Secret), ADRESSE_GLOBAL et ADRESSE_LOCAL (Variables) sont requis."
             exit 1
           fi
           if [ "${REMOTE_CHEMIN}" = "/" ]; then
-            echo "::error title=REMOTE_CHEMIN invalide::REMOTE_CHEMIN ne peut pas être '/'. Mets le chemin absolu vers ton htdocs (ex: /homepages/xx/dxxxx/htdocs)."
+            echo "::error title=REMOTE_CHEMIN invalide::REMOTE_CHEMIN ne peut pas être '/'."
             exit 1
           fi
-          if [ -z "${ADRESSE_GLOBAL:-}" ] || [ -z "${ADRESSE_LOCAL:-}" ]; then
-            echo "::error title=Variables manquantes::ADRESSE_GLOBAL et ADRESSE_LOCAL doivent être définies (Settings → Variables)."
-            exit 1
-          fi
-
           REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/dev/${ADRESSE_LOCAL#/}"
-
-          # Nettoyage pour éviter les doubles //
-
           REMOTE_PATH="$(printf '%s' "$REMOTE_PATH" | sed -E 's:/+:/:g')"
-
-          echo "Trace> REMOTE_PATH construit = $REMOTE_PATH"
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
 
       - name: 🔌 Tester la connexion SSH
@@ -73,17 +59,26 @@ jobs:
           REMOTE_PATH="${{ steps.build_path.outputs.REMOTE_PATH }}"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
             ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} \
-            "mkdir -p -- \"$REMOTE_PATH\" \
-             && echo '✅ Dossier prêt: ' \"$REMOTE_PATH\" \
-             && echo 'Parent:' \$(dirname \"$REMOTE_PATH\") \
-             && ls -ld \$(dirname \"$REMOTE_PATH\") || true"
+            "mkdir -p -- \"$REMOTE_PATH\" && echo '✅ Dossier prêt: ' \"$REMOTE_PATH\""
+
+      # ⚠️ Normalise la clé pour wlixcc (remplace \n par vrais retours ligne)
+      - name: 🔑 Normaliser la clé privée pour SFTP action
+        id: fixkey
+        shell: bash
+        run: |
+          {
+            echo "ssh_key<<'EOF'"
+            printf '%s' "${{ secrets.SSH_PRIVATE_KEY }}" | sed 's/\\n/\n/g'
+            echo
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: 🚚 Deploy via SFTP (incremental)
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USER }}
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh_private_key: ${{ steps.fixkey.outputs.ssh_key }}
           local_path: .
           remote_path: ${{ steps.build_path.outputs.REMOTE_PATH }}
           sftpArgs: "-rz --exclude='.git*' --exclude='.github/**' --exclude='node_modules/**' --exclude='.env*' --exclude='tests/**' --exclude='coverage/**'"
