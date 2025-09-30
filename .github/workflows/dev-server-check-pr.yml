@@ -1,86 +1,66 @@
-name: Pre-Merge Server Check
+name: Dev Server Check (PR)
+
 on:
-  push:
-    branches: [ develop ]
   pull_request:
     branches: [ develop ]
-concurrency:
-  group: server-check-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+    types: [opened, synchronize, reopened, ready_for_review]
+
 permissions:
   contents: read
+
+concurrency:
+  group: dev-server-check-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 env:
-  REMOTE_TARGET: ${{ secrets.REMOTE_CHEMIN }}${{ vars.ADRESSE_GLOBAL && format('/{0}', vars.ADRESSE_GLOBAL) || '' }}/dev/${{ vars.ADRESSE_LOCAL }}
+  REMOTE_CHEMIN: ${{ vars.REMOTE_CHEMIN }}
+  ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
+  ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
+
 jobs:
-  ftps:
-    name: FTPS connectivity & write probe
+  dev-check:
+    name: Vérification connexion & dossier serveur
     runs-on: ubuntu-latest
-    if: ${{ secrets.FTP_SERVER != '' && secrets.FTP_USERNAME != '' && secrets.FTP_PASSWORD != '' && env.REMOTE_TARGET != '' }}
+
     steps:
-      - name: 🔎 Echo target
+      - name: Vérifier les variables requises
         run: |
-          echo "Server: ${{ secrets.FTP_SERVER }}"
-          echo "Remote target: $REMOTE_TARGET/"
-      - name: 🧰 Install lftp
-        run: sudo apt-get update && sudo apt-get install -y lftp
-      - name: 🌐 DNS & Port reachability
+          miss=0
+          for v in REMOTE_CHEMIN ADRESSE_GLOBAL ADRESSE_LOCAL; do
+            if [ -z "${!v}" ]; then
+              echo "::error title=Variable manquante::$v n'est pas défini."
+              miss=1
+            else
+              echo "::notice title=Variable::$v=${!v}"
+            fi
+          done
+          [ "$miss" -eq 0 ] || exit 1
+
+      - name: Construire le chemin cible
+        id: path
+        shell: bash
         run: |
-          getent hosts "${{ secrets.FTP_SERVER }}"
-          timeout 5 bash -lc "cat < /dev/null > /dev/tcp/${{ secrets.FTP_SERVER }}/21" || {
-            echo "❌ Port 21 injoignable (FTPS explicite). Si tu utilises FTPS implicite, passe sur 990.";
-            exit 1;
-          }
-      - name: 🔐 Auth & write probe (create+delete)
-        env:
-          LFTP_HOST: ${{ secrets.FTP_SERVER }}
-          LFTP_USER: ${{ secrets.FTP_USERNAME }}
-          LFTP_PASS: ${{ secrets.FTP_PASSWORD }}
+          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/dev/${ADRESSE_LOCAL#/}"
+          echo "REMOTE_PATH=$REMOTE_PATH"
+          echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Vérifier connexion SSH
         run: |
-          PROBE=".server-check-$(date +%s).txt"
-          echo "ok $(date -u +%FT%TZ)" > "$PROBE"
-          lftp -e "
-            set net:max-retries 1;
-            set net:timeout 10;
-            set ftp:ssl-allow true;
-            set ftp:ssl-force true;
-            set ftp:ssl-protect-data true;
-            set ssl:verify-certificate true;
-            open -u $LFTP_USER,$LFTP_PASS $LFTP_HOST;
-            cd $REMOTE_TARGET;
-            put $PROBE;
-            ls -l $PROBE;
-            rm -f $PROBE;
-            bye
-          " || { echo '❌ FTPS probe failed'; exit 1; }
-          echo '✅ FTPS OK & dossier écrivable'
-  sftp:
-    name: SFTP connectivity & write probe
-    runs-on: ubuntu-latest
-    if: ${{ secrets.SFTP_HOST != '' && secrets.SFTP_USER != '' && secrets.SSH_PRIVATE_KEY != '' && env.REMOTE_TARGET != '' }}
-    steps:
-      - name: 🔐 Prepare SSH key & known_hosts
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} "echo 'Connexion SSH OK'"
+
+      - name: Vérifier/Créer le dossier distant
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ secrets.SFTP_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
-          chmod 700 ~/.ssh
-      - name: 🌐 DNS & Port reachability
-        run: |
-          getent hosts "${{ secrets.SFTP_HOST }}"
-          timeout 5 bash -lc "cat < /dev/null > /dev/tcp/${{ secrets.SFTP_HOST }}/22" || {
-            echo "❌ Port 22 injoignable (SFTP/SSH).";
-            exit 1;
-          }
-      - name: 🔐 Auth & write probe (create+delete)
-        run: |
-          PROBE=".server-check-$(date +%s).txt"
-          echo "ok $(date -u +%FT%TZ)" > "$PROBE"
-          sftp -i ~/.ssh/id_rsa -b - "${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}" <<EOF
-              cd $REMOTE_TARGET
-              put $PROBE
-              ls -l $PROBE
-              rm $PROBE
-              bye
-            EOF
-          echo '✅ SFTP OK & dossier écrivable'
+          REMOTE_PATH="${{ steps.path.outputs.REMOTE_PATH }}"
+          echo "Vérification du dossier : $REMOTE_PATH"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} "\
+            if [ -d \"$REMOTE_PATH\" ]; then \
+              echo '✅ Dossier déjà présent : $REMOTE_PATH'; \
+            else \
+              echo '⚠️ Dossier absent, création en cours : $REMOTE_PATH'; \
+              mkdir -p \"$REMOTE_PATH\" && echo '✅ Dossier créé.'; \
+            fi"
