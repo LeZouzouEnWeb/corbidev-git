@@ -1,4 +1,4 @@
-name: ✅ CI – Build & Tests (PR)
+name: CI – Build & Tests (PR)
 on:
   pull_request:
     branches: [ develop ]
