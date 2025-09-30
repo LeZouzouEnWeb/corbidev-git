@@ -1,0 +1,136 @@
+name: 🚀 Deploy DEV (IONOS SFTP)
+
+on:
+  pull_request:
+    branches: [ develop ]
+    types: [ closed ]
+  push:
+    branches: [ develop ]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Ne pas uploader (test uniquement) ?"
+        type: boolean
+        default: true
+      adresse_local:
+        description: "Override ADRESSE_LOCAL (optionnel)"
+        type: string
+        required: false
+
+concurrency:
+  group: deploy-develop
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    env:
+      # Flag dry-run si lancé manuellement + entrée cochée
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - name: 🔐 Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 🔧 Construire le chemin distant normalisé
+        id: build_path
+        env:
+          REMOTE_CHEMIN: ${{ secrets.REMOTE_CHEMIN }}
+          ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
+          ADRESSE_LOCAL_DEFAULT: ${{ vars.ADRESSE_LOCAL }}
+          ADRESSE_LOCAL_INPUT: ${{ github.event.inputs.adresse_local }}
+        run: |
+          set -euo pipefail
+          ADRESSE_LOCAL="${ADRESSE_LOCAL_INPUT:-${ADRESSE_LOCAL_DEFAULT:-}}"
+
+          echo "Trace> REMOTE_CHEMIN='${REMOTE_CHEMIN:-}'"
+          echo "Trace> ADRESSE_GLOBAL='${ADRESSE_GLOBAL:-}'"
+          echo "Trace> ADRESSE_LOCAL (final)='${ADRESSE_LOCAL:-}'"
+          echo "Trace> DRY_RUN='${DRY_RUN:-}'"
+
+          if [ -z "${REMOTE_CHEMIN:-}" ] || [ -z "${ADRESSE_GLOBAL:-}" ] || [ -z "${ADRESSE_LOCAL:-}" ]; then
+            echo "::error title=Variables manquantes::REMOTE_CHEMIN (Secret), ADRESSE_GLOBAL et ADRESSE_LOCAL sont requis."
+            exit 1
+          fi
+          if [ "${REMOTE_CHEMIN}" = "/" ]; then
+            echo "::error title=REMOTE_CHEMIN invalide::REMOTE_CHEMIN ne peut pas être '/'."
+            exit 1
+          fi
+
+          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/dev/${ADRESSE_LOCAL#/}"
+          REMOTE_PATH="$(printf '%s' "$REMOTE_PATH" | sed -E 's:/+:/:g')"
+
+          echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
+          echo "ADRESSE_LOCAL=$ADRESSE_LOCAL" >> "$GITHUB_OUTPUT"
+
+      - name: 🔌 Tester la connexion SSH
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+            ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} \
+            "echo 'SSH OK: ' \$(hostname)"
+
+      - name: 🏁 Mode dry-run — récap seulement
+        if: env.DRY_RUN == 'true'
+        run: |
+          echo "Dry-run ACTIVÉ : aucun upload."
+          echo "Chemin distant ciblé : ${{ steps.build_path.outputs.REMOTE_PATH }}"
+          echo "Aperçu local (exclusions simulées) :"
+          # Simule les exclusions les plus courantes :
+          find . -type f \
+            ! -path './.git*' \
+            ! -path './.github/*' \
+            ! -path './node_modules/*' \
+            ! -name '.env*' \
+            ! -path './tests/*' \
+            ! -path './coverage/*' \
+            | head -n 200
+
+      - name: 📁 S'assurer que le dossier existe
+        if: env.DRY_RUN != 'true'
+        run: |
+          REMOTE_PATH="${{ steps.build_path.outputs.REMOTE_PATH }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+            ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} \
+            "mkdir -p -- \"$REMOTE_PATH\" && echo '✅ Dossier prêt: ' \"$REMOTE_PATH\""
+
+      # Normaliser la clé pour l’action SFTP (évite "invalid format")
+      - name: 🔑 Normaliser la clé privée pour SFTP
+        if: env.DRY_RUN != 'true'
+        id: fixkey
+        shell: bash
+        run: |
+          key='${{ secrets.SSH_PRIVATE_KEY }}'
+          key="${key//\\n/$'\n'}"
+          {
+            echo "ssh_key<<EOF"
+            printf '%s\n' "$key"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 🚚 Deploy via SFTP (incremental)
+        if: env.DRY_RUN != 'true'
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USER }}
+          ssh_private_key: ${{ steps.fixkey.outputs.ssh_key }}
+          local_path: .
+          remote_path: ${{ steps.build_path.outputs.REMOTE_PATH }}
+          sftpArgs: "-rz --exclude='.git*' --exclude='.github/**' --exclude='node_modules/**' --exclude='.env*' --exclude='tests/**' --exclude='coverage/**'"
+
+      - name: 👀 Lister le dossier déployé (debug)
+        if: env.DRY_RUN != 'true'
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+            ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} \
+            "ls -la '${{ steps.build_path.outputs.REMOTE_PATH }}' || true"
