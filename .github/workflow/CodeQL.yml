@@ -1,0 +1,40 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 3 * * 1'  # hebdo (optionnel)
+
+permissions:
+  contents: read
+  security-events: write   # requis pour publier les alerts Code Scanning
+  actions: read
+
+concurrency:
+  group: codeql-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql-js:
+    name: CodeQL (JS/TS)
+    runs-on: ubuntu-latest
+    # évite de faire tourner CodeQL s'il n'y a aucun fichier js/ts
+    if: ${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Init CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"

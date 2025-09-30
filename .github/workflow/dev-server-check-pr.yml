@@ -1,4 +1,4 @@
-name: ✅ Pre-Merge Server Check (IONOS)
+name: Pre-Merge Server Check
 on:
   pull_request:
     branches: [ develop ]
@@ -8,7 +8,7 @@ concurrency:
 permissions:
   contents: read
 env:
-  REMOTE_TARGET: ${{ secrets.REMOTE_CHEMIN }}${{ vars.ADRESSE_GLOBAL && format('/{0}', vars.ADRESSE_GLOBAL) || '' }}/dev${{vars.ADRESSE_LOCAL }}
+  REMOTE_TARGET: ${{ secrets.REMOTE_CHEMIN }}${{ vars.ADRESSE_GLOBAL && format('/{0}', vars.ADRESSE_GLOBAL) || '' }}/dev/${{ vars.ADRESSE_LOCAL }}
 jobs:
   ftps:
     name: FTPS connectivity & write probe
