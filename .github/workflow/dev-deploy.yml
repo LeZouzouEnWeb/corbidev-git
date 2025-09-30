@@ -26,7 +26,7 @@ jobs:
           protocol: ftps
           port: 21
           local-dir: .
-          server-dir: ${{ secrets.REMOTE_CHEMIN }}/${{ vars.ADRESSE_GLOBAL }}/dev/${{vars.ADRESSE_LOCAL }}
+          server-dir: ${{ secrets.REMOTE_CHEMIN }}/${{ vars.ADRESSE_GLOBAL }}/dev/${{ vars.ADRESSE_LOCAL }}
           state-name: .ftp-deploy-sync-state-dev.json
           exclude: |
             **/.git*
