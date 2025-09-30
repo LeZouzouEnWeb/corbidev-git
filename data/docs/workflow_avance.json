@@ -1,0 +1,13 @@
+{
+  "title": "Workflow Git avancé",
+  "items": [
+    {
+      "title": "Rebase interactif",
+      "text": "Édition de l’historique, squash, fixup, reword..."
+    },
+    {
+      "title": "Cherry-pick",
+      "text": "Appliquer un commit précis sur une autre branche."
+    }
+  ]
+}

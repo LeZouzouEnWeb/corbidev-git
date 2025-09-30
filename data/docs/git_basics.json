@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Repository",
+    "text": "Un dépôt est un ensemble de fichiers et dossiers gérés par Git."
+  },
+  {
+    "title": "Commit",
+    "text": "Un commit est un snapshot; chaque commit a un hash unique."
+  },
+  {
+    "title": "Branch",
+    "text": "Une branche est une ligne de développement indépendante."
+  }
+]

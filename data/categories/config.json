@@ -1,0 +1,10 @@
+[
+  {
+    "cmd": "git config --global user.name \"Nom\"",
+    "description": "Définir le nom d’utilisateur global"
+  },
+  {
+    "cmd": "git config --global user.email \"email@ex.com\"",
+    "description": "Définir l’adresse e-mail globale"
+  }
+]

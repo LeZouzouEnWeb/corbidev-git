@@ -17,7 +17,7 @@
     return n;
   };
 
-  const state = { route:{tab:'courantes',view:'grid'}, scroll:{} };
+  const state = { route:{tab:'courantes',view:'grid', file:null}, scroll:{}, last:{} };
   try{ const mem = sessionStorage.getItem('git_ui_state'); if (mem) Object.assign(state, JSON.parse(mem)); }catch{}
   const saveState = () => { try{ sessionStorage.setItem('git_ui_state', JSON.stringify(state)); }catch{} };
 
@@ -40,7 +40,6 @@
     }catch{ btn.classList.add("err"); setTimeout(()=>btn.classList.remove("err"), 900); }
   };
 
-  // Smooth scroll with sticky offset (topbar + tabs)
   const smoothScrollTo = (node) => {
     const topbar = document.querySelector('.topbar'); const tabs = document.querySelector('.tabs');
     const offset = (topbar?.getBoundingClientRect().height || 0) + (tabs?.getBoundingClientRect().height || 0) + 12;
@@ -48,20 +47,15 @@
     window.scrollTo({top:y, behavior:'smooth'});
   };
 
-  // Global Sommaire in header
+  // Summary globals
   const hamburger = $("#summaryHamburger");
   const panel = $("#summaryPanel");
   const list = $("#summaryList");
+  const filter = $("#summaryFilter");
   const closeBtn = $("#summaryClose");
 
-  const closePanel = () => { panel.hidden = true; hamburger.setAttribute('aria-expanded','false'); };
-  const openPanel = () => {
-    // position panel just under header/tabs (robust even if heights change)
-    const topbar = document.querySelector('.topbar'); const tabs = document.querySelector('.tabs');
-    const top = (topbar?.getBoundingClientRect().height || 0) + (tabs?.getBoundingClientRect().height || 0) + 10;
-    panel.style.top = top + 'px';
-    panel.hidden = false; hamburger.setAttribute('aria-expanded','true');
-  };
+  const closePanel = () => { panel.classList.remove('open'); panel.hidden = true; hamburger.setAttribute('aria-expanded','false'); };
+  const openPanel = () => { panel.hidden = false; requestAnimationFrame(()=> panel.classList.add('open')); hamburger.setAttribute('aria-expanded','true'); filter?.focus(); };
   hamburger.addEventListener("click", ()=> panel.hidden ? openPanel() : closePanel());
   closeBtn.addEventListener("click", closePanel);
   document.addEventListener("keydown", (e)=> { if ((e.key||'').toLowerCase()==='t') (panel.hidden?openPanel():closePanel()); if (e.key==='Escape') closePanel(); });
@@ -71,36 +65,64 @@
     if (!inside) closePanel();
   });
 
-  const setSummary = (labels, ids) => {
-    // affiche le hamburger si on a des entrées, sinon le masque
-    if (!labels || labels.length === 0){ hamburger.hidden = true; closePanel(); return; }
+  let _labels=[], _ids=[], _handlers=[];
+  const applyFilter = () => {
+    const q = (filter?.value || '').trim().toLowerCase();
+    const items = Array.from(list.children);
+    items.forEach((li, i)=>{
+      const txt = _labels[i]?.toLowerCase() || '';
+      li.style.display = (!q || txt.includes(q)) ? '' : 'none';
+    });
+  };
+  const setSummary = (labels, ids, handlers=null) => {
+    _labels = labels || []; _ids = ids || []; _handlers = handlers || [];
+    if (!_labels.length){ hamburger.hidden = true; closePanel(); return; }
     hamburger.hidden = false;
     list.innerHTML = "";
-    labels.forEach((lab, i)=>{
-      const id = ids[i];
-      const a = el('a',{href:'#'+id, onclick:(e)=>{ e.preventDefault(); const node=document.getElementById(id); if(node){ smoothScrollTo(node); } closePanel(); }}, lab);
+    _labels.forEach((lab, i)=>{
+      const id = _ids[i];
+      const a = el('a',{href: id ? ('#'+id) : '#', onclick:(e)=>{
+        e.preventDefault();
+        if (_handlers[i]) { _handlers[i](); closePanel(); return; }
+        if (id){ const node=document.getElementById(id); if(node){ smoothScrollTo(node); closePanel(); } }
+      }}, lab);
       list.appendChild(el('li',{}, a));
     });
-    // surlignage actif au scroll
-    const links = Array.from(list.querySelectorAll('a'));
-    const map = new Map(links.map(a => [a.getAttribute('href').slice(1), a]));
+    if (filter){ filter.value=''; filter.removeEventListener('input', applyFilter); filter.addEventListener('input', applyFilter); }
+
+    const validIds = _ids.filter(Boolean);
+    const links = Array.from(list.querySelectorAll('a')).filter((_,i)=> !!_ids[i]);
+    const map = new Map(links.map((a,i) => [validIds[i], a]));
     if (setSummary.io) setSummary.io.disconnect();
-    const io = new IntersectionObserver(entries => {
-      entries.forEach(en => {
-        if (en.isIntersecting){
-          links.forEach(a=>a.classList.remove('active'));
-          const a = map.get(en.target.id);
-          if (a) a.classList.add('active');
-        }
-      });
-    }, {root:null, rootMargin:"0px 0px -70% 0px", threshold:0.1});
-    ids.forEach(id => { const n = document.getElementById(id); if(n) io.observe(n); });
-    setSummary.io = io;
+    if (validIds.length){
+      const io = new IntersectionObserver(entries => {
+        entries.forEach(en => {
+          if (en.isIntersecting){
+            links.forEach(a=>a.classList.remove('active'));
+            const a = map.get(en.target.id);
+            if (a) a.classList.add('active');
+          }
+        });
+      }, {root:null, rootMargin:"0px 0px -70% 0px", threshold:0.1});
+      validIds.forEach(id => { const n = document.getElementById(id); if(n) io.observe(n); });
+      setSummary.io = io;
+    }
+  };
+  const clearSummary = () => setSummary([],[],[]);
+
+  // API helpers
+  const listModules = async (tab) => {
+    const r = await fetch(`api/modules.php?tab=${encodeURIComponent(tab)}&list=1`, {cache:'no-store'});
+    if (!r.ok) throw new Error('Liste modules échouée');
+    return r.json();
+  };
+  const loadModule = async (tab, file) => {
+    const r = await fetch(`api/modules.php?tab=${encodeURIComponent(tab)}&file=${encodeURIComponent(file)}`, {cache:'no-store'});
+    if (!r.ok) throw new Error('Chargement module échoué');
+    return r.json();
   };
 
-  const clearSummary = () => { setSummary([],[]); };
-
-  // ---------- Cards
+  // Cards
   const renderCommandCard = ({cmd, description}, id) => {
     const card = el("div", {class:"card", id});
     const input = el("input", {type:"text", readonly:"", value:cmd});
@@ -112,60 +134,6 @@
     card.appendChild(head); card.appendChild(desc); card.appendChild(row);
     return card;
   };
-
-  const sorters = {
-    'az': (a,b)=> a.cmd.localeCompare(b.cmd,'fr',{sensitivity:'base'}),
-    'za': (a,b)=> b.cmd.localeCompare(a.cmd,'fr',{sensitivity:'base'}),
-    'freq': (a,b)=> (getCounts()[b.cmd]||0)-(getCounts()[a.cmd]||0) || a.cmd.localeCompare(b.cmd,'fr')
-  };
-
-  // ---------- Categories
-  const renderCategoryDetail = (name, items) => {
-    const ctn = $("#categories-container"); ctn.innerHTML = "";
-    const header = el("div",{class:"section-header"},
-      el("h2",{class:"section-title"}, name),
-      el("button",{class:"back-btn", onclick:()=>{ renderCategories(window._categories); window.scrollTo(0,  state.scroll['cats']||0); clearSummary(); } },"← Retour")
-    );
-    ctn.appendChild(header);
-    const action = el("div",{class:"actionbar"},
-      el("div",{class:"segment"},
-        ...["az","za","freq"].map(k=>{
-          const label = k==="az"?"A→Z":k==="za"?"Z→A":"Fréquence";
-          const btn = el("button",{class: k==="az"?"active":"", onclick:()=>{ $$(".actionbar .segment button").forEach(b=>b.classList.remove("active")); btn.classList.add("active"); renderList(k);} }, label);
-          return btn;
-        })
-      )
-    );
-    ctn.appendChild(action);
-    const grid = el("div",{class:"grid"}); ctn.appendChild(grid);
-
-    const renderList = (mode='az') => {
-      grid.innerHTML = "";
-      const arr = [...items].sort(sorters[mode]);
-      const labels=[]; const ids=[];
-      arr.forEach((i, idx)=> { const id='cmd-'+idx; labels.push(i.cmd); ids.push(id); grid.appendChild(renderCommandCard(i, id)); });
-      setSummary(labels, ids);
-    };
-    renderList('az');
-  };
-
-  const renderCategories = (cats, q="") => {
-    window._categories = cats;
-    const ctn = $("#categories-container"); ctn.innerHTML = "";
-    const grid = el("div",{class:"cat-grid"});
-    Object.entries(cats).forEach(([name, items])=>{
-      const hay = (name + " " + items.map(i=>i.cmd+" "+(i.description||"")).join(" ")).toLowerCase();
-      if (q && !hay.includes(q.toLowerCase())) return;
-      const tile = el("div",{class:"cat-tile", onclick:()=>{
-        state.scroll['cats']=window.scrollY; state.route={tab:'categories',view:'detail',cat:name}; saveState(); renderCategoryDetail(name, items); window.scrollTo(0,0);
-      }}, el("h4",{}, name), el("small",{}, items.length+" commandes"));
-      grid.appendChild(tile);
-    });
-    ctn.appendChild(grid);
-    clearSummary();
-  };
-
-  // ---------- Docs
   const renderDocCard = (item, id) => {
     const card = el("div",{class:"card doc-card", id});
     const h = el("div",{class:"card-head"}, el("h3",{}, item.title));
@@ -179,80 +147,156 @@
     return card;
   };
 
-  const renderDocsDetail = (name, items) => {
-    const ctn = $("#docs-container"); ctn.innerHTML = "";
-    const header = el("div",{class:"section-header"},
-      el("h2",{class:"section-title"}, name),
-      el("button",{class:"back-btn", onclick:()=>{ renderDocs(window._docs); window.scrollTo(0,  state.scroll['docs']||0); clearSummary(); } },"← Retour")
-    );
-    ctn.appendChild(header);
-    const action = el("div",{class:"actionbar"},
-      el("div",{class:"segment"},
-        ...["az","za"].map(k=>{
-          const label = k==="az"?"A→Z":"Z→A";
-          const btn = el("button",{class: k==="az"?"active":"", onclick:()=>{ $$(".actionbar .segment button").forEach(b=>b.classList.remove("active")); btn.classList.add("active"); renderList(k);} }, label);
-          return btn;
-        })
-      )
-    );
-    ctn.appendChild(action);
-    const list = el("div",{class:"grid"}); ctn.appendChild(list);
+  // Tab controller + registry
+  const controllers = {};
 
-    const renderList = (mode='az') => {
-      list.innerHTML = "";
-      const arr = [...items].sort((a,b)=> mode==='az'? a.title.localeCompare(b.title,'fr'):b.title.localeCompare(a.title,'fr'));
-      const labels=[]; const ids=[];
-      arr.forEach((it, idx)=> { const id='doc-'+idx; labels.push(it.title); ids.push(id); list.appendChild(renderDocCard(it, id)); });
-      setSummary(labels, ids);
+  const setupTab = (tab, containerId, type) => {
+    const ctn = $(containerId);
+    const search = $(`#search-${tab}`);
+
+    const openModule = async (file, titleOverride=null) => {
+      state.last[tab] = {file}; saveState();
+      const name = titleOverride || file.replace(/\.json$/,'').replace(/[_-]+/g,' ').replace(/\b\w/g, m=>m.toUpperCase());
+      ctn.innerHTML = "";
+      const header = el("div",{class:"section-header"},
+        el("h2",{class:"section-title"}, name),
+        el("button",{class:"back-btn", onclick:()=>{ showGrid(); window.scrollTo(0, state.scroll[tab]||0); clearSummary(); } },"← Retour")
+      );
+      ctn.appendChild(header);
+
+      const data = await loadModule(tab, file);
+
+      const action = el("div",{class:"actionbar"},
+        el("div",{class:"segment"},
+          ...(type==='docs' ? ['az','za'] : ['az','za','freq']).map(k=>{
+            const label = k==='az'?'A→Z':k==='za'?'Z→A':'Fréquence';
+            const btn = el("button",{class: k==='az'?'active':'', onclick:()=>{ $$(".actionbar .segment button").forEach(b=>b.classList.remove("active")); btn.classList.add("active"); renderList(k);} }, label);
+            return btn;
+          })
+        )
+      );
+      ctn.appendChild(action);
+
+      const grid = el("div",{class:"grid"}); ctn.appendChild(grid);
+
+      const renderList = (mode='az') => {
+        grid.innerHTML = "";
+        if (type==='docs'){
+          const arr = [...data].sort((a,b)=> mode==='az'? a.title.localeCompare(b.title,'fr'):b.title.localeCompare(a.title,'fr'));
+          const labels = []; const ids = [];
+          arr.forEach((it, idx)=> { const id = `doc-${idx}`; labels.push(it.title); ids.push(id); grid.appendChild(renderDocCard(it, id)); });
+          setSummary(labels, ids, []);
+        } else {
+          const sorters = {
+            'az': (a,b)=> a.cmd.localeCompare(b.cmd,'fr',{sensitivity:'base'}),
+            'za': (a,b)=> b.cmd.localeCompare(a.cmd,'fr',{sensitivity:'base'}),
+            'freq': (a,b)=> (getCounts()[b.cmd]||0)-(getCounts()[a.cmd]||0) || a.cmd.localeCompare(b.cmd,'fr')
+          };
+          const arr = [...data].sort(sorters[mode]);
+          const labels = []; const ids = [];
+          arr.forEach((it, idx)=> { const id = `cmd-${idx}`; labels.push(it.cmd); ids.push(id); grid.appendChild(renderCommandCard(it, id)); });
+          setSummary(labels, ids, []);
+        }
+      };
+      renderList('az');
     };
-    renderList('az');
-  };
 
-  const renderDocs = (docs, q="") => {
-    window._docs = docs;
-    const ctn = $("#docs-container"); ctn.innerHTML = "";
-    const grid = el("div",{class:"doc-grid"});
-    Object.entries(docs).forEach(([name, items])=>{
-      const hay = (name + " " + items.map(a=>a.title).join(" ") + " " + items.map(a=> (a.text||'')).join(" ")).toLowerCase();
-      if (q && !hay.includes(q.toLowerCase())) return;
-      const tile = el("div",{class:"doc-tile", onclick:()=>{
-        state.scroll['docs']=window.scrollY; state.route={tab:'docs',view:'detail',doc:name}; saveState(); renderDocsDetail(name, items); window.scrollTo(0,0);
-      }}, el("h4",{}, name), el("small",{}, items.length+" articles"));
-      grid.appendChild(tile);
+    const showGrid = async () => {
+      const listing = await listModules(tab);
+      const modules = listing.modules || [];
+      if (modules.length <= 1){
+        const m = modules[0] || {file:'default.json', title:'Module'};
+        await openModule(m.file, m.title);
+        return;
+      }
+      ctn.innerHTML = "";
+      const grid = el("div",{class:"module-grid"});
+      modules.forEach((m, i)=>{
+        const id = `mod-${i}`;
+        const tile = el("div",{class:"module-tile", id, onclick: async ()=>{ state.scroll[tab]=window.scrollY; await openModule(m.file, m.title); window.scrollTo(0,0);} },
+          el("h4",{}, m.title || m.file),
+          el("small",{}, m.file),
+          el("span",{class:"module-count"}, `${m.count ?? 0}`)
+        );
+        tile.dataset.file = m.file;
+        tile.dataset.title = m.title || m.file;
+        grid.appendChild(tile);
+      });
+      ctn.appendChild(grid);
+      setSummary(modules.map(m=> m.title || m.file), modules.map((_,i)=>`mod-${i}`), modules.map(m => ()=> openModule(m.file, m.title)));
+    };
+
+    search?.addEventListener('input', async (e)=>{
+      const q = (e.target.value||'').toLowerCase();
+      const grid = ctn.querySelector('.module-grid');
+      if (grid){
+        Array.from(grid.children).forEach(tile => {
+          const txt = tile.innerText.toLowerCase();
+          tile.style.display = txt.includes(q) ? '' : 'none';
+        });
+      } else {
+        const cards = ctn.querySelectorAll('.card');
+        cards.forEach(card => {
+          const txt = card.innerText.toLowerCase();
+          card.style.display = txt.includes(q) ? '' : 'none';
+        });
+      }
     });
-    ctn.appendChild(grid);
-    clearSummary();
+
+    (async ()=>{
+      await showGrid();
+      const prev = state.last[tab]?.file;
+      if (prev && (await listModules(tab)).modules.some(m => m.file === prev)){
+        await openModule(prev);
+      }
+    })();
+
+    const ctrl = { openModule, showGrid, containerId, type };
+    controllers[tab] = ctrl;
+    return ctrl;
   };
 
-  // Tabs
-  $$(".tab").forEach(t => t.addEventListener("click", () => {
+  // Rebuild summary when switching tabs
+  const refreshSummaryForTab = (tab) => {
+    const ctrl = controllers[tab];
+    if (!ctrl) { clearSummary(); return; }
+    const ctn = $(ctrl.containerId);
+    if (!ctn) { clearSummary(); return; }
+    const grid = ctn.querySelector('.module-grid');
+    if (grid){
+      const tiles = Array.from(grid.querySelectorAll('.module-tile'));
+      const labels = tiles.map(t => (t.querySelector('h4')?.textContent || t.dataset.title || '').trim());
+      const ids = tiles.map(t => t.id);
+      const handlers = tiles.map(t => () => ctrl.openModule(t.dataset.file, t.dataset.title));
+      setSummary(labels, ids, handlers);
+      return;
+    }
+    // module detail
+    const cards = Array.from(ctn.querySelectorAll('.card'));
+    if (!cards.length){ clearSummary(); return; }
+    const labels = cards.map(c => (c.querySelector('.card-head h3')?.textContent || '').trim());
+    const ids = cards.map(c => c.id);
+    setSummary(labels, ids, []);
+  };
+
+  // Tabs switching
+  $$(".tab").forEach(t => t.addEventListener("click", async () => {
     $$(".tab").forEach(x=>x.classList.remove("active"));
     t.classList.add("active");
     $$(".tab-panel").forEach(p => p.classList.remove("active"));
     document.querySelector(`#tab-${t.dataset.tab}`).classList.add("active");
-    state.route.tab = t.dataset.tab; state.route.view='grid'; saveState();
+    state.route.tab = t.dataset.tab; state.route.view='grid'; state.route.file=null; saveState();
     window.scrollTo(0,0);
-    clearSummary();
+    // Ne pas vider le sommaire, mais le réactualiser selon l'onglet
+    refreshSummaryForTab(t.dataset.tab);
   }));
 
   // Init
   (async function init(){
-    const courantes = await (await fetch("api/data.php?f=courantes",{cache:"no-store"})).json();
-    const courCtn = $("#courantes-container");
-    courCtn.innerHTML = "";
-    courantes.forEach((c,i)=> courCtn.appendChild(renderCommandCard(c, 'cour-'+i)));
-    $("#search-courantes").addEventListener("input", e=>{
-      const q = e.target.value.toLowerCase();
-      courCtn.innerHTML = "";
-      courantes.filter(c=> (c.cmd+" "+(c.description||"")).toLowerCase().includes(q)).forEach((c,i)=> courCtn.appendChild(renderCommandCard(c, 'cour-'+i)));
-    });
-
-    const cats = await (await fetch("api/data.php?f=commandes_par_categorie",{cache:"no-store"})).json();
-    renderCategories(cats);
-    $("#search-categories").addEventListener("input", e => renderCategories(cats, e.target.value));
-
-    const docs = await (await fetch("api/data.php?f=docs_par_categorie",{cache:"no-store"})).json();
-    renderDocs(docs);
-    $("#search-docs").addEventListener("input", e => renderDocs(docs, e.target.value));
+    setupTab('courantes', '#courantes-container', 'commands');
+    setupTab('categories', '#categories-container', 'commands');
+    setupTab('docs', '#docs-container', 'docs');
+    // première construction de sommaire pour l'onglet par défaut
+    refreshSummaryForTab('courantes');
   })();
 })();
