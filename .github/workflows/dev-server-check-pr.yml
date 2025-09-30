@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REMOTE_CHEMIN: ${{ vars.REMOTE_CHEMIN }}
+  REMOTE_CHEMIN: ${{ secrets.REMOTE_CHEMIN }}
   ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
   ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
 
