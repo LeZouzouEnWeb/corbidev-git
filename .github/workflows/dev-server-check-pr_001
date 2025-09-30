@@ -74,11 +74,11 @@ jobs:
         run: |
           PROBE=".server-check-$(date +%s).txt"
           echo "ok $(date -u +%FT%TZ)" > "$PROBE"
-          printf '%s\n' \
-            "cd $REMOTE_TARGET" \
-            "put $PROBE" \
-            "ls -l $PROBE" \
-            "rm $PROBE" \
-            "bye" \
-          | sftp -i ~/.ssh/id_rsa -b - "${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}"
+          sftp -i ~/.ssh/id_rsa -b - "${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}" <<EOF
+cd $REMOTE_TARGET
+put $PROBE
+ls -l $PROBE
+rm $PROBE
+bye
+EOF
           echo '✅ SFTP OK & dossier écrivable'
