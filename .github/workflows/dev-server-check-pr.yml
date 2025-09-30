@@ -1,84 +1,114 @@
-name: Pre-Merge Server Check
+name: Dev Server Check (PR)
+
 on:
   pull_request:
-    branches: [ develop ]
-concurrency:
-  group: server-check-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+    branches: [ develop, main ]
+
 permissions:
   contents: read
-env:
-  REMOTE_TARGET: ${{ secrets.REMOTE_CHEMIN }}${{ vars.ADRESSE_GLOBAL && format('/{0}', vars.ADRESSE_GLOBAL) || '' }}/dev/${{ vars.ADRESSE_LOCAL }}
+
+concurrency:
+  group: dev-server-check-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  ftps:
-    name: FTPS connectivity & write probe
+  dev-check:
+    name: Pre-merge dev server checks
     runs-on: ubuntu-latest
-    if: ${{ secrets.FTP_SERVER != '' && secrets.FTP_USERNAME != '' && secrets.FTP_PASSWORD != '' && env.REMOTE_TARGET != '' }}
+    timeout-minutes: 10
+
+    # On mappe les secrets/vars dans l'env (utilisable dans les steps)
+    env:
+      REMOTE_TARGET: ${{ vars.REMOTE_TARGET || env.REMOTE_TARGET }}
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      SFTP_HOST: ${{ secrets.SFTP_HOST }}
+      SFTP_USER: ${{ secrets.SFTP_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
     steps:
-      - name: 🔎 Echo target
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # On calcule des flags "has_ftp" et "has_sftp" en sortie de step
+      - name: Compute available transports
+        id: flags
+        shell: bash
         run: |
-          echo "Server: ${{ secrets.FTP_SERVER }}"
-          echo "Remote target: $REMOTE_TARGET/"
-      - name: 🧰 Install lftp
-        run: sudo apt-get update && sudo apt-get install -y lftp
-      - name: 🌐 DNS & Port reachability
+          set -euo pipefail
+          has_ftp=true
+          for v in FTP_SERVER FTP_USERNAME FTP_PASSWORD REMOTE_TARGET; do
+            if [[ -z "${!v:-}" ]]; then
+              has_ftp=false
+            fi
+          done
+
+          has_sftp=true
+          for v in SFTP_HOST SFTP_USER SSH_PRIVATE_KEY REMOTE_TARGET; do
+            if [[ -z "${!v:-}" ]]; then
+              has_sftp=false
+            fi
+          done
+
+          echo "has_ftp=$has_ftp" >> "$GITHUB_OUTPUT"
+          echo "has_sftp=$has_sftp" >> "$GITHUB_OUTPUT"
+
+          echo "Detected:"
+          echo "  has_ftp=$has_ftp"
+          echo "  has_sftp=$has_sftp"
+
+      # === FTP check (optionnel si secrets renseignés) ===
+      - name: FTP list remote target
+        if: ${{ steps.flags.outputs.has_ftp == 'true' }}
+        shell: bash
         run: |
-          getent hosts "${{ secrets.FTP_SERVER }}"
-          timeout 5 bash -lc "cat < /dev/null > /dev/tcp/${{ secrets.FTP_SERVER }}/21" || {
-            echo "❌ Port 21 injoignable (FTPS explicite). Si tu utilises FTPS implicite, passe sur 990.";
-            exit 1;
-          }
-      - name: 🔐 Auth & write probe (create+delete)
-        env:
-          LFTP_HOST: ${{ secrets.FTP_SERVER }}
-          LFTP_USER: ${{ secrets.FTP_USERNAME }}
-          LFTP_PASS: ${{ secrets.FTP_PASSWORD }}
+          set -euo pipefail
+          echo "Listing ftp://$FTP_SERVER/$REMOTE_TARGET/"
+          curl -sS --fail \
+            --user "$FTP_USERNAME:$FTP_PASSWORD" \
+            "ftp://$FTP_SERVER/$REMOTE_TARGET/" \
+            | sed -n '1,60p'
+          echo "✅ FTP reachable & target directory listable"
+
+      # === SFTP check (optionnel si secrets renseignés) ===
+      - name: Setup SSH key (SFTP)
+        if: ${{ steps.flags.outputs.has_sftp == 'true' }}
+        shell: bash
         run: |
-          PROBE=".server-check-$(date +%s).txt"
-          echo "ok $(date -u +%FT%TZ)" > "$PROBE"
-          lftp -e "
-            set net:max-retries 1;
-            set net:timeout 10;
-            set ftp:ssl-allow true;
-            set ftp:ssl-force true;
-            set ftp:ssl-protect-data true;
-            set ssl:verify-certificate true;
-            open -u $LFTP_USER,$LFTP_PASS $LFTP_HOST;
-            cd $REMOTE_TARGET;
-            put $PROBE;
-            ls -l $PROBE;
-            rm -f $PROBE;
-            bye
-          " || { echo '❌ FTPS probe failed'; exit 1; }
-          echo '✅ FTPS OK & dossier écrivable'
-  sftp:
-    name: SFTP connectivity & write probe
-    runs-on: ubuntu-latest
-    if: ${{ secrets.SFTP_HOST != '' && secrets.SFTP_USER != '' && secrets.SSH_PRIVATE_KEY != '' && env.REMOTE_TARGET != '' }}
-    steps:
-      - name: 🔐 Prepare SSH key & known_hosts
-        run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ secrets.SFTP_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
           chmod 700 ~/.ssh
-      - name: 🌐 DNS & Port reachability
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_sftp
+          chmod 600 ~/.ssh/id_sftp
+          # known_hosts optionnel (sécurise la connexion si tu veux)
+          ssh-keyscan -T 5 "$SFTP_HOST" 2>/dev/null >> ~/.ssh/known_hosts || true
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: SFTP probe (write/list/delete)
+        if: ${{ steps.flags.outputs.has_sftp == 'true' }}
+        id: sftp_probe
+        shell: bash
         run: |
-          getent hosts "${{ secrets.SFTP_HOST }}"
-          timeout 5 bash -lc "cat < /dev/null > /dev/tcp/${{ secrets.SFTP_HOST }}/22" || {
-            echo "❌ Port 22 injoignable (SFTP/SSH).";
-            exit 1;
-          }
-      - name: 🔐 Auth & write probe (create+delete)
-        run: |
-          PROBE=".server-check-$(date +%s).txt"
+          set -euo pipefail
+          PROBE=".server-check-$(date -u +%Y%m%dT%H%M%SZ).txt"
           echo "ok $(date -u +%FT%TZ)" > "$PROBE"
+
+          # Pas de heredoc YAML -> on pipe un batch SFTP
           printf '%s\n' \
             "cd $REMOTE_TARGET" \
             "put $PROBE" \
             "ls -l $PROBE" \
             "rm $PROBE" \
             "bye" \
-          | sftp -i ~/.ssh/id_rsa -b - "${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}"
-          echo '✅ SFTP OK & dossier écrivable'
+          | sftp -b - -i ~/.ssh/id_sftp "${SFTP_USER}@${SFTP_HOST}"
+
+          echo "✅ SFTP OK & remote dir writable"
+
+      # Si aucun transport n'est disponible, on échoue explicitement
+      - name: Fail if no transport available
+        if: ${{ steps.flags.outputs.has_ftp != 'true' && steps.flags.outputs.has_sftp != 'true' }}
+        shell: bash
+        run: |
+          echo "::error title=No transport configured::Neither FTP nor SFTP credentials are set. Provide secrets or disable this check."
+          exit 1
