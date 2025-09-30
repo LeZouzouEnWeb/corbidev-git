@@ -2,7 +2,7 @@ name: Dev Server Check (PR)
 
 on:
   pull_request:
-    branches: [ develop, main ]
+    branches: [ develop ]
 
 permissions:
   contents: read

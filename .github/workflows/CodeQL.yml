@@ -10,31 +10,30 @@ on:
 
 permissions:
   contents: read
-  security-events: write   # requis pour publier les alerts Code Scanning
+  security-events: write
   actions: read
 
-concurrency:
-  group: codeql-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  codeql-js:
-    name: CodeQL (JS/TS)
+  codeql:
     runs-on: ubuntu-latest
-    # évite de faire tourner CodeQL s'il n'y a aucun fichier js/ts
-    if: ${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') != '' }}
+    timeout-minutes: 60
+
     steps:
       - uses: actions/checkout@v4
 
+      # Ne lance CodeQL que si des fichiers JS/TS existent dans le repo
       - name: Init CodeQL
+        if: ${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') != '' }}
         uses: github/codeql-action/init@v3
         with:
           languages: javascript-typescript
 
       - name: Autobuild
+        if: ${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') != '' }}
         uses: github/codeql-action/autobuild@v3
 
       - name: Analyze
+        if: ${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') != '' }}
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:javascript"
