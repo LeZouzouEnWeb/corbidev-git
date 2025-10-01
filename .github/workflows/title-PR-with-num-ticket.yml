@@ -1,4 +1,3 @@
-
 name: Add Ticket Number to PR Title
 
 on:
@@ -47,7 +46,7 @@ jobs:
               }
 
               // Étape 6 : Reformater le titre
-              let newTitle = `[#${ticketNumber}] ${cleanedTitle}`;
+              let newTitle = `[${ticketNumber}] ${cleanedTitle}`;
               console.log(`Updating PR Title to: ${newTitle}`);
 
               // Étape 7 : Mettre à jour le titre sur GitHub
