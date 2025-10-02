@@ -1,4 +1,4 @@
-name: 🔄 Normalize PR title (#num → "[#num] rest of title")
+name: Normalize PR title (#num → "[#num] rest of title")
 'on':
   pull_request:
     types:
@@ -36,7 +36,23 @@ jobs:
           \ || findTicketNum(branch);\nif (!num) {\n  core.info(\"Aucun numéro de\
           \ ticket détecté dans le titre ni la branche.\");\n  return;\n}\n\n// Déduire\
           \ la partie 'après le numéro' à partir du titre (ou de la branche si plus\
-          \ parlant).\nfunction tailAfterNumber(s, n) {\n  if (!s) return \"\";\n  const reBefore = new RegExp(`^.*?${n}\\b[\\s_\\-\\/]*`, \"i\");\n  let after = s.replace(reBefore, \"\");\n\n  // Nettoyage: normaliser espaces et séparateurs\n  after = after\n    .replace(/^[\\s:_\\-\\/]+/, \" \")\n    .replace(/[\\/\\_\\-]+/g, \" \")\n    .replace(/\\s+/g, \" \")\n    .trim();\n\n  return after;\n}\n\n// Utiliser le titre en priorité\
+          \ parlant).\nfunction tailAfterNumber(s, n) {\n  if (!s) return \"\";\n\
+          \  const idxHash = s.search(new RegExp(`#${n}\\b`));\n  const idxTicket\
+          \ = s.search(new RegExp(`ticket[-_\\s]?${n}\\b`, 'i'));\n  const idxJira\
+          \ = s.search(new RegExp(`[A-Z][A-Z0-9_]*-${n}\\b`));\n\n  // motif \"nombre\
+          \ suivi d'un /\"\n  const reNumSlash = new RegExp(`(^|[^\\d])(${n})(\\s*\\\
+          /)(.*)$`);\n\n  let after = \"\";\n  if (idxHash >= 0) {\n    after = s.slice(idxHash\
+          \ + (`#${n}`).length);\n  } else if (idxTicket >= 0) {\n    after = s.slice(idxTicket\
+          \ + (`ticket`.length + String(n).length + 1)); // approx; nettoyé plus bas\n\
+          \  } else if (idxJira >= 0) {\n    after = s.slice(idxJira + (s.match(new\
+          \ RegExp(`[A-Z][A-Z0-9_]*-${n}\\b`))[0].length));\n  } else if (reNumSlash.test(s))\
+          \ {\n    after = s.replace(reNumSlash, \"$4\");\n  } else {\n    // fallback\
+          \ : coupez avant le premier nombre trouvé et prenez ce qui suit\n    const\
+          \ reBefore = new RegExp(`^.*?${n}\\b[\\s_\\-\\/]*`);\n    after = s.replace(reBefore,\
+          \ \"\");\n  }\n\n  // Nettoyage: remplacer séparateurs par espaces, enlever\
+          \ préfixes communs\n  after = after\n    .replace(/^[\\s:_\\-\\/]+/, \"\
+          \ \")\n    .replace(/[\\/_\\-]+/g, \" \")\n    .replace(/\\s+/g, \" \")\n\
+          \    .trim();\n\n  return after;\n}\n\n// Utiliser le titre en priorité\
           \ comme source du libellé après le numéro; sinon la branche.\nlet tail =\
           \ tailAfterNumber(origTitle, num);\nif (!tail) {\n  tail = tailAfterNumber(branch,\
           \ num);\n}\n\n// Si rien trouvé, on garde l'ancien titre dépollué.\nif (!tail)\
