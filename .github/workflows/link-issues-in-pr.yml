@@ -8,11 +8,6 @@ permissions:
   contents: read
   pull-requests: write
 
-env:
-  # Un seul groupe capturant pour le numéro: (\d+)
-  # Couvre:  #123  |  ABC-123  |  fix/close/resolve #123  |  ticket-123 / ticket 123 / ticket_123
-  TICKET_REGEX: '(?:(?:\\B#|[A-Z][A-Z0-9_]+-|(?:close[sd]?|fix(?:es|ed)?|resolve(?:s|d)?)\\s+#|ticket[-_ ]?)(\\d+)\\b)'
-
 jobs:
   link:
     runs-on: ubuntu-latest
@@ -25,29 +20,69 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
-            const ticketRe = new RegExp(process.env.TICKET_REGEX, 'ig'); // 'i' insensitive, 'g' global
-            const strongVerbRe = /\b(fix(?:es|ed)?|close(?:s|d)?|resolve(?:s|d)?)\b/i;
+            // --- Regex robustes, sans variables d'env ni groupes nommés ---
+            // A. Formats "ticket-123", "ticket 123", "ticket_123" (branche & titre)
+            const reTicketInBranch = /(?:^|\/)ticket[-_ ]?(\d+)(?=\/|$)/ig;
+            const reTicketInText   = /\bticket[-_ ]?(\d+)\b/ig;
+
+            // B. Liens #123, clés PROJ-123, et fermetures "fix/close/resolve #123"
+            const reHashIssue     = /#(\d+)\b/g;
+            const reProjectIssue  = /\b[A-Z][A-Z0-9_]+-(\d+)\b/g;
+            const reClosingRef    = /(?:close[sd]?|fix(?:es|ed)?|resolve(?:s|d)?)\s+#(\d+)/ig;
+
+            // Verbe fort détecté n'importe où => "Fixes #"
+            const strongVerbRe    = /\b(fix(?:es|ed)?|close(?:s|d)?|resolve(?:s|d)?)\b/i;
 
             const branch = pr.head.ref || '';
             const title  = pr.title || '';
             let body     = pr.body || '';
 
-            // Commits de la PR (pour repérer d'éventuels numéros)
+            // Récupérer tous les messages de commit de la PR
             const commits = await github.paginate(
               github.rest.pulls.listCommits,
               { owner, repo, pull_number: pr.number, per_page: 100 }
             );
             const commitMessages = commits.map(c => c.commit.message).join('\n');
 
-            // Texte à analyser
+            // Pour debug
+            console.log(`PR #${pr.number} — BRANCH="${branch}" TITLE="${title}"`);
             const haystack = [branch, title, body, commitMessages].join('\n');
 
-            // Extraction: le numéro est dans le groupe 1
+            // ---- Détection des numéros ----
             const found = new Set();
-            for (const m of haystack.matchAll(ticketRe)) {
-              const n = m[1] || (m[0].match(/\d+/) || [])[0];
-              if (n && /^\d+$/.test(n)) found.add(Number(n));
+
+            // 1) ticket-123 dans le NOM DE BRANCHE
+            for (const m of branch.matchAll(reTicketInBranch)) {
+              const n = Number(m[1]); if (Number.isInteger(n)) found.add(n);
             }
+
+            // 2) ticket-123 / ticket 123 / ticket_123 dans TITRE + BODY + COMMITS
+            for (const m of title.matchAll(reTicketInText)) {
+              const n = Number(m[1]); if (Number.isInteger(n)) found.add(n);
+            }
+            for (const m of body.matchAll(reTicketInText)) {
+              const n = Number(m[1]); if (Number.isInteger(n)) found.add(n);
+            }
+            for (const m of commitMessages.matchAll(reTicketInText)) {
+              const n = Number(m[1]); if (Number.isInteger(n)) found.add(n);
+            }
+
+            // 3) #123 (dans titre/body/commits)
+            for (const m of haystack.matchAll(reHashIssue)) {
+              const n = Number(m[1]); if (Number.isInteger(n)) found.add(n);
+            }
+
+            // 4) PROJ-123 (dans titre/body/commits)
+            for (const m of haystack.matchAll(reProjectIssue)) {
+              const n = Number(m[1]); if (Number.isInteger(n)) found.add(n);
+            }
+
+            // 5) Fermetures explicites "fix/close/resolve #123"
+            for (const m of haystack.matchAll(reClosingRef)) {
+              const n = Number(m[1]); if (Number.isInteger(n)) found.add(n);
+            }
+
+            console.log('NUMÉROS détectés:', [...found]);
 
             if (found.size === 0) {
               core.setFailed(
@@ -59,7 +94,7 @@ jobs:
 
             const useFixes = strongVerbRe.test(haystack);
 
-            // Évite les doublons déjà présents dans le body
+            // ---- Éviter les doublons dans le body de la PR ----
             const already = new Set();
             const bodyLower = body.toLowerCase();
             for (const n of found) {
