@@ -1,4 +1,4 @@
-name: Dev Server Check (PR)
+name: 🔳 Dev Server Check (PR)
 
 on:
   pull_request:
