@@ -1,4 +1,4 @@
-name: Dev Deploy (after PR)
+name: 🚀 Dev Deploy (after PR)
 
 on:
   pull_request:

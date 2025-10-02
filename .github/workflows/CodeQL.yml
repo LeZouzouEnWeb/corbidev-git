@@ -1,10 +1,10 @@
-name: CodeQL
+name: 🔣 CodeQL
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, homol, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, homol, develop ]
   schedule:
     - cron: '0 3 * * 1'  # hebdo (optionnel)
 
