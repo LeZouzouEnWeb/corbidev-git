@@ -1,12 +1,8 @@
 name: 🔄 Normalize PR title (#num → "[#num] rest of title")
-'on':
+on:
   pull_request:
-    types:
-    - opened
-    - edited
-    - synchronize
-    - ready_for_review
-    - reopened
+    types: [opened, edited, synchronize, ready_for_review, reopened]
+
 permissions:
   contents: read
   pull-requests: write
