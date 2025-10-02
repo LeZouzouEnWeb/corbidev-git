@@ -52,7 +52,7 @@ jobs:
           \ \"\");\n  }\n\n  // Nettoyage: remplacer séparateurs par espaces, enlever\
           \ préfixes communs\n  after = after\n    .replace(/^[\\s:_\\-\\/]+/, \"\
           \ \")\n    .replace(/[\\/_\\-]+/g, \" \")\n    .replace(/\\s+/g, \" \")\n\
-          \    .trim();\n\n  return after;\n}\n\n// Utiliser le titre en priorité\
+          \    .trim()\n    // supprime les préfixes type "feature", "feat", "fix", "hotfix", "chore", "ticket", etc.\n    .replace(/^(?:feature|feat|fix|hotfix|chore|ticket|issue|bug|task|story)\b[\s:_\-]*/i, "")\n    // gère le cas collé: "ticketcreer" -> "creer"\n    .replace(/^(?:feature|feat|fix|hotfix|chore|ticket|issue|bug|task|story)(?=[A-Za-zÀ-ÿ])/i, "");\n\n  return after;\n}\n\n// Utiliser le titre en priorité\
           \ comme source du libellé après le numéro; sinon la branche.\nlet tail =\
           \ tailAfterNumber(origTitle, num);\nif (!tail) {\n  tail = tailAfterNumber(branch,\
           \ num);\n}\n\n// Si rien trouvé, on garde l'ancien titre dépollué.\nif (!tail)\
