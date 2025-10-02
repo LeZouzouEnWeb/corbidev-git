@@ -1,8 +1,12 @@
 name: 🔄 Normalize PR title (#num → "[#num] rest of title")
-on:
+'on':
   pull_request:
-    types: [opened, edited, synchronize, ready_for_review, reopened]
-
+    types:
+    - opened
+    - edited
+    - synchronize
+    - ready_for_review
+    - reopened
 permissions:
   contents: read
   pull-requests: write
@@ -48,11 +52,7 @@ jobs:
           \ \"\");\n  }\n\n  // Nettoyage: remplacer séparateurs par espaces, enlever\
           \ préfixes communs\n  after = after\n    .replace(/^[\\s:_\\-\\/]+/, \"\
           \ \")\n    .replace(/[\\/_\\-]+/g, \" \")\n    .replace(/\\s+/g, \" \")\n\
-          \    .trim()
-    // supprime les préfixes type "feature", "feat", "fix", "hotfix", "chore", "ticket", etc.
-    .replace(/^(?:feature|feat|fix|hotfix|chore|ticket|issue|bug|task|story)\b[\s:_\-]*/i, "")
-    // gère le cas collé: "ticketcreer" -> "creer"
-    .replace(/^(?:feature|feat|fix|hotfix|chore|ticket|issue|bug|task|story)(?=[A-Za-zÀ-ÿ])/i, "");\n\n  return after;\n}\n\n// Utiliser le titre en priorité\
+          \    .trim();\n\n  return after;\n}\n\n// Utiliser le titre en priorité\
           \ comme source du libellé après le numéro; sinon la branche.\nlet tail =\
           \ tailAfterNumber(origTitle, num);\nif (!tail) {\n  tail = tailAfterNumber(branch,\
           \ num);\n}\n\n// Si rien trouvé, on garde l'ancien titre dépollué.\nif (!tail)\
