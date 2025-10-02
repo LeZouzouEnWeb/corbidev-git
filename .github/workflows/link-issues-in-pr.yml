@@ -9,8 +9,9 @@ permissions:
   pull-requests: write
 
 env:
-  # One-line regex, antislashs échappés.
-  TICKET_REGEX: '(?:\\B#(?<num>\\d+)\\b|[A-Z][A-Z0-9_]+-(?<num>\\d+)\\b|(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#(?<num>\\d+)|ticket[-_ ]?(?<num>\\d+)\\b)'
+  # Un seul groupe capturant pour le numéro: (\d+)
+  # Couvre:  #123  |  ABC-123  |  fix/close/resolve #123  |  ticket-123 / ticket 123 / ticket_123
+  TICKET_REGEX: '(?:(?:\\B#|[A-Z][A-Z0-9_]+-|(?:close[sd]?|fix(?:es|ed)?|resolve(?:s|d)?)\\s+#|ticket[-_ ]?)(\\d+)\\b)'
 
 jobs:
   link:
@@ -24,24 +25,27 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
-            const ticketRe = new RegExp(process.env.TICKET_REGEX, 'ig');
+            const ticketRe = new RegExp(process.env.TICKET_REGEX, 'ig'); // 'i' insensitive, 'g' global
             const strongVerbRe = /\b(fix(?:es|ed)?|close(?:s|d)?|resolve(?:s|d)?)\b/i;
 
             const branch = pr.head.ref || '';
             const title  = pr.title || '';
             let body     = pr.body || '';
 
+            // Commits de la PR (pour repérer d'éventuels numéros)
             const commits = await github.paginate(
               github.rest.pulls.listCommits,
               { owner, repo, pull_number: pr.number, per_page: 100 }
             );
             const commitMessages = commits.map(c => c.commit.message).join('\n');
 
+            // Texte à analyser
             const haystack = [branch, title, body, commitMessages].join('\n');
 
+            // Extraction: le numéro est dans le groupe 1
             const found = new Set();
             for (const m of haystack.matchAll(ticketRe)) {
-              const n = (m.groups && m.groups.num) ? m.groups.num : (m[1] || (m[0].match(/\d+/) || [])[0]);
+              const n = m[1] || (m[0].match(/\d+/) || [])[0];
               if (n && /^\d+$/.test(n)) found.add(Number(n));
             }
 
@@ -55,6 +59,7 @@ jobs:
 
             const useFixes = strongVerbRe.test(haystack);
 
+            // Évite les doublons déjà présents dans le body
             const already = new Set();
             const bodyLower = body.toLowerCase();
             for (const n of found) {
