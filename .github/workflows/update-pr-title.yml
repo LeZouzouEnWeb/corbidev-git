@@ -36,7 +36,20 @@ jobs:
           \ || findTicketNum(branch);\nif (!num) {\n  core.info(\"Aucun numéro de\
           \ ticket détecté dans le titre ni la branche.\");\n  return;\n}\n\n// Déduire\
           \ la partie 'après le numéro' à partir du titre (ou de la branche si plus\
-          \ parlant).\nfunction tailAfterNumber(s, n) {\n  if (!s) return \"\";\n  const reBefore = new RegExp(`^.*?${n}\\b[\\s_\\-\\/]*`, \"i\");\n  let after = s.replace(reBefore, \"\");\n\n  // Nettoyage: normaliser espaces et séparateurs\n  after = after\n    .replace(/^[\\s:_\\-\\/]+/, \" \")\n    .replace(/[\\/\\_\\-]+/g, \" \")\n    .replace(/\\s+/g, \" \")\n    .trim();\n\n  return after;\n}\n\n// Utiliser le titre en priorité\
+          \ parlant).\nfunction tailAfterNumber(s, n) {
+  if (!s) return \"\";
+  const reBefore = new RegExp(`^.*?${n}\\b[\\s_\-\/]*`, \"i\");
+  let after = s.replace(reBefore, \"\");
+
+  // Nettoyage: normaliser espaces et séparateurs
+  after = after
+    .replace(/^[\s:_\-\/]+/, \" \")
+    .replace(/[\/\_\-]+/g, \" \")
+    .replace(/\s+/g, \" \")
+    .trim();
+
+  return after;
+}\n\n// Utiliser le titre en priorité\
           \ comme source du libellé après le numéro; sinon la branche.\nlet tail =\
           \ tailAfterNumber(origTitle, num);\nif (!tail) {\n  tail = tailAfterNumber(branch,\
           \ num);\n}\n\n// Si rien trouvé, on garde l'ancien titre dépollué.\nif (!tail)\
