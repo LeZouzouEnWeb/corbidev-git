@@ -1,0 +1,63 @@
+name: CI – Build & Tests (PR)
+on:
+  pull_request:
+    branches: [ develop ]
+concurrency:
+  group: ci-pr-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  php:
+    name: PHP / Composer / Tests
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('composer.json') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: none
+          extensions: mbstring, intl, xml, ctype, json, pdo_mysql
+      - name: 🧱 Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+      - run: composer install --no-interaction --prefer-dist
+      - name: 🧪 PHPUnit
+        if: ${{ hashFiles('phpunit.xml*') != '' }}
+        run: vendor/bin/phpunit
+      - name: 🔎 PHPCS
+        if: ${{ hashFiles('phpcs.xml*') != '' }}
+        run: vendor/bin/phpcs -q
+  node:
+    name: Node / Build / Tests
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('package.json') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: 🧪 Tests (si script existe)
+        run: |
+          if npm run | grep -qE '\btest\b'; then
+            npm test --ignore-scripts=false
+          else
+            echo 'No test script'
+          fi
+      - name: 🏗️ Build (si script existe)
+        run: |
+          if npm run | grep -qE '\bbuild\b'; then
+            npm run build
+          else
+            echo 'No build script'
+          fi

@@ -1,0 +1,14 @@
+[
+  {
+    "cmd": "git switch -c feature/xyz",
+    "description": "Créer et basculer sur une branche"
+  },
+  {
+    "cmd": "git merge feature/xyz",
+    "description": "Fusionner une branche"
+  },
+  {
+    "cmd": "git rebase main",
+    "description": "Rebaser la branche sur main"
+  }
+]
