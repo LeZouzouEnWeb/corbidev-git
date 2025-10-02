@@ -1,8 +1,9 @@
 name: PR requires linked issue
 
 on:
-  pull_request_target:
-    types: [opened, edited, synchronize, reopened]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
 
 permissions:
   contents: read
