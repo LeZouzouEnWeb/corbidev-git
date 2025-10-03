@@ -1,0 +1,65 @@
+name: 🚀 Deploy (multi-env)
+
+on:
+  push:
+    branches: [ main, homol, develop ]
+
+jobs:
+  deploy:
+    # 1) Matrice branche → environnement
+    strategy:
+      matrix:
+        include:
+          - branch: main
+            remote_env: prod
+          - branch: homol
+            remote_env: homol
+          - branch: develop
+            remote_env: dev
+
+    # 2) On ne garde que l’item de matrice qui matche la branche en cours
+    if: ${{ github.ref_name == matrix.branch }}
+
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-${{ matrix.remote_env }}
+      cancel-in-progress: false
+
+    env:
+      # Variables déjà existantes côté GitHub → Repository Variables
+      REMOTE_CHEMIN: ${{ vars.REMOTE_CHEMIN }}
+      ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
+      ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
+      # Env cible depuis la matrice
+      REMOTE_ENV: ${{ matrix.remote_env }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Echo contexte
+        run: |
+          echo "Branch        : $GITHUB_REF_NAME"
+          echo "REMOTE_ENV    : $REMOTE_ENV"
+          echo "REMOTE_CHEMIN : $REMOTE_CHEMIN"
+          echo "ADRESSE_GLOBAL: $ADRESSE_GLOBAL"
+          echo "ADRESSE_LOCAL : $ADRESSE_LOCAL"
+
+      # (Optionnel) Normalisation des / pour éviter les doubles ou manquants
+      - name: Build remote path (normalized)
+        id: path
+        shell: bash
+        run: |
+          RC="${REMOTE_CHEMIN%/}"
+          AG="${ADRESSE_GLOBAL%/}"
+          AL="${ADRESSE_LOCAL#/}"
+          DEST="$RC/$AG/$REMOTE_ENV/$AL/"
+          echo "DEST=$DEST" >> "$GITHUB_OUTPUT"
+          echo "Chemin distant : $DEST"
+
+      - name: Deploy via rsync
+        run: |
+          rsync -avz --delete \
+            --exclude-from='.rsync-ignore' \
+            ./ \
+            "${{ steps.path.outputs.DEST }}"
