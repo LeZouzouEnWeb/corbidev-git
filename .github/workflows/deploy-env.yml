@@ -4,9 +4,14 @@ on:
   push:
     branches: [ main, homol, develop ]
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   deploy:
-    # 1) Matrice branche → environnement
+    runs-on: ubuntu-latest
+
     strategy:
       matrix:
         include:
@@ -17,16 +22,12 @@ jobs:
           - branch: develop
             remote_env: dev
 
-    # 2) On ne garde que l’item de matrice qui matche la branche en cours
-    if: ${{ github.ref_name == matrix.branch }}
-
-    runs-on: ubuntu-latest
     concurrency:
       group: deploy-${{ matrix.remote_env }}
       cancel-in-progress: false
 
     env:
-      # Variables déjà existantes côté GitHub → Repository Variables
+      # Repository Variables
       REMOTE_CHEMIN: ${{ vars.REMOTE_CHEMIN }}
       ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
       ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
@@ -37,7 +38,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Echo contexte
+      - name: Contexte (echo)
+        if: ${{ github.ref_name == matrix.branch }}
         run: |
           echo "Branch        : $GITHUB_REF_NAME"
           echo "REMOTE_ENV    : $REMOTE_ENV"
@@ -45,11 +47,11 @@ jobs:
           echo "ADRESSE_GLOBAL: $ADRESSE_GLOBAL"
           echo "ADRESSE_LOCAL : $ADRESSE_LOCAL"
 
-      # (Optionnel) Normalisation des / pour éviter les doubles ou manquants
       - name: Build remote path (normalized)
         id: path
-        shell: bash
+        if: ${{ github.ref_name == matrix.branch }}
         run: |
+          # Normalisation des / pour éviter doubles/manquants
           RC="${REMOTE_CHEMIN%/}"
           AG="${ADRESSE_GLOBAL%/}"
           AL="${ADRESSE_LOCAL#/}"
@@ -58,8 +60,12 @@ jobs:
           echo "Chemin distant : $DEST"
 
       - name: Deploy via rsync
+        if: ${{ github.ref_name == matrix.branch }}
         run: |
-          rsync -avz --delete \
-            --exclude-from='.rsync-ignore' \
+          # Utilise .rsync-ignore si présent, sinon sans exclude
+          EXCLUDE=""
+          [[ -f .rsync-ignore ]] && EXCLUDE="--exclude-from=.rsync-ignore"
+
+          rsync -avz --delete $EXCLUDE \
             ./ \
             "${{ steps.path.outputs.DEST }}"
