@@ -25,59 +25,58 @@ jobs:
             }
 
             const origTitle = pr.title || "";
-            const branch = pr.head && pr.head.ref ? pr.head.ref : "";
+            const branch = pr.head?.ref || "";
 
-            // Si le titre est déjà normalisé [#123] ..., on sort.
+            // Déjà normalisé ? [#123] ...
             if (/^\s*\[#\d+\]\s+/i.test(origTitle)) {
               core.info("Le titre semble déjà normalisé, aucune action.");
               return;
             }
 
-            // Recherche du numéro: priorités (#123) > ticket-123/ticket 123 > JIRA ABC-123 > nombre avec /
+            // 1) Détection du numéro (#123 > ticket-123|ticket 123 > ABC-123 > '... 123/...').
             function findTicketNum(s) {
               if (!s) return null;
               let m;
-              m = s.match(/#(\d{1,8})\b/); if (m) return m[1];
-              m = s.match(/ticket[-_\s]?(\d{1,8})\b/i); if (m) return m[1];
-              m = s.match(/[A-Z][A-Z0-9_]*-(\d{1,8})\b/); if (m) return m[1];
-              // nombre suivi d'un slash
-              m = s.match(/(^|[^\d])(\d{1,8})(?=\s*\/)/); if (m) return m[2];
+              m = s.match(/#(\d{1,8})\b/);                if (m) return m[1];
+              m = s.match(/ticket[-_\s]?(\d{1,8})\b/i);    if (m) return m[1];
+              m = s.match(/[A-Z][A-Z0-9_]*-(\d{1,8})\b/);  if (m) return m[1];
+              m = s.match(/(^|[^\d])(\d{1,8})(?=\s*\/)/);  if (m) return m[2];
               return null;
             }
 
             const num = findTicketNum(origTitle) || findTicketNum(branch);
             if (!num) {
-              core.info("Aucun numéro de ticket détecté dans le titre ni la branche.");
+              core.info("Aucun numéro détecté dans le titre/branche.");
               return;
             }
 
-            // Déduire la partie 'après le numéro' depuis titre (ou branche)
+            // 2) Extraire la partie 'après le numéro'
             function tailAfterNumber(s, n) {
               if (!s) return "";
-              const idxHash   = s.search(new RegExp(`#${n}\b`));
-              const idxTicket = s.search(new RegExp(`ticket[-_\s]?${n}\b`, 'i'));
-              const idxJira   = s.search(new RegExp(`[A-Z][A-Z0-9_]*-${n}\b`));
+              const idxHash   = s.search(new RegExp(`#${n}\\b`));
+              const idxTicket = s.search(new RegExp(`ticket[-_\\s]?${n}\\b`, "i"));
+              const idxJira   = s.search(new RegExp(`[A-Z][A-Z0-9_]*-${n}\\b`));
 
-              // motif "nombre suivi d'un /"
-              const reNumSlash = new RegExp(`(^|[^\d])(${n})(\s*\/)(.*)$`);
+              const reNumSlash = new RegExp(`(^|[^\\d])(${n})(\\s*\\/)(.*)$`);
 
               let after = "";
               if (idxHash >= 0) {
                 after = s.slice(idxHash + (`#${n}`).length);
               } else if (idxTicket >= 0) {
-                // on coupe après "ticket{sep}{n}", le nettoyage uniformisera
-                after = s.slice(idxTicket + (`ticket`.length + String(n).length + 1));
+                // "ticket{sep}{n}" → coupe ici, on nettoiera ensuite
+                after = s.slice(idxTicket + ("ticket".length + String(n).length + 1));
               } else if (idxJira >= 0) {
-                after = s.slice(idxJira + (s.match(new RegExp(`[A-Z][A-Z0-9_]*-${n}\b`))[0].length));
+                const m = s.match(new RegExp(`[A-Z][A-Z0-9_]*-${n}\\b`));
+                after = s.slice(idxJira + (m ? m[0].length : 0));
               } else if (reNumSlash.test(s)) {
                 after = s.replace(reNumSlash, "$4");
               } else {
-                // fallback : supprime tout jusqu'au n° et prend ce qui suit
-                const reBefore = new RegExp(`^.*?${n}\b[\s_\-\/]*`);
+                // fallback: supprime tout jusqu'au n° et prend la suite
+                const reBefore = new RegExp(`^.*?${n}\\b[\\s_\\-\\/]*`);
                 after = s.replace(reBefore, "");
               }
 
-              // Nettoyage des séparateurs et préfixes communs
+              // Nettoyage séparateurs
               after = after
                 .replace(/^[\s:_\-\/]+/, " ")
                 .replace(/[\/_\-]+/g, " ")
@@ -98,26 +97,29 @@ jobs:
                 .trim();
             }
 
-            // --- Post-traitement minimal ---
-            // 1) supprimer un "ticket" résiduel, même s'il est collé au mot suivant
+            // 3) SUPPRIMER "ticket" PARTOUT (début, après séparateur, OU collé au mot suivant)
+            //    - ex: "ticket-48", "ticket 48", "ticketErreur" → tous supprimés.
             tail = tail
-              .replace(/^ticket\b[\s:_\-\/]+/i, "")
-              .replace(/^ticket(?=[A-Za-zÀ-ÿ])/i, "")
-              .replace(/^\s+/, "")
+              // cas séparé: début OU après séparateur
+              .replace(/(^|[\s:_\-\/])ticket\b(?:[-_\/\s]+)?/gi, " ")
+              // cas collé au mot suivant (ticketerreur)
+              .replace(/(^|[\s:_\-\/])ticket(?=[A-Za-zÀ-ÿ])/gi, " ")
+              .replace(/\s+/g, " ")
               .trim();
 
-            // 2) récupérer le préfixe textuel initial du titre (ex: Fixbug) et insérer " - "
+            // 4) Récupérer le préfixe (ex: "Fixbug") au début du titre d'origine avant un séparateur
             const catMatch = origTitle.match(/^\s*([A-Za-z][A-Za-z0-9]*)\s*[\/:_\-]/);
             if (catMatch) {
               const cat = catMatch[1];
-              if (!new RegExp(`^${cat}\\b`, "i").test(tail)) {
-                tail = `${cat} - ${tail}`.replace(/\s+/g, " ").trim();
+              const reBeginsWithCat = new RegExp("^" + cat + "\\b", "i");
+              if (!reBeginsWithCat.test(tail)) {
+                tail = (cat + " - " + tail).replace(/\s+/g, " ").trim();
               } else {
-                tail = tail.replace(new RegExp(`^${cat}\\b[\\s:_\\-\\/]*`, "i"), `${cat} - `);
+                const reCatSep = new RegExp("^" + cat + "\\b[\\s:_\\-\\/]*", "i");
+                tail = tail.replace(reCatSep, cat + " - ");
               }
               tail = tail.replace(/\s+/g, " ").trim();
             }
-            // --- Fin post-traitement ---
 
             const newTitle = `[#${num}] ${tail}`.trim();
 
