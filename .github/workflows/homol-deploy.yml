@@ -9,10 +9,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: dev-deploy-${{ github.event.pull_request.head.ref }}
+  group: homol-deploy-${{ github.event.pull_request.head.ref }}
   cancel-in-progress: true
 
 env:
+  REMOTE_ENV : homol
   REMOTE_CHEMIN: ${{ secrets.REMOTE_CHEMIN }}
   ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
   ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
@@ -23,7 +24,7 @@ env:
 
 jobs:
   deploy:
-    name: Déployer sur le serveur DEV
+    name: Déployer sur le serveur HOMOL
     if: ${{ github.event.pull_request.merged == true }} # uniquement si la PR a été mergée
     runs-on: ubuntu-latest
 
@@ -51,11 +52,12 @@ jobs:
         run: |
           norm() { printf "%s" "$1" | sed -e 's#//*#/#g' -e 's#^/##' -e 's#/$##'; }
           _remote="$(norm "$REMOTE_CHEMIN")"
+          _env="$(norm "$REMOTE_ENV")"  
           _glob="$(norm "$ADRESSE_GLOBAL")"
           _loca="$(norm "$ADRESSE_LOCAL")"
 
           # Chemin attendu : REMOTE_CHEMIN/ADRESSE_GLOBAL/homol/ADRESSE_LOCAL
-          REMOTE_PATH="/${_remote}/${_glob}/dev/${_loca}"
+          REMOTE_PATH="/${_remote}/${_glob}/  ${_env}/${_loca}"
           REMOTE_PATH="$(echo "$REMOTE_PATH" | sed -e 's#//*#/#g')"
 
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"

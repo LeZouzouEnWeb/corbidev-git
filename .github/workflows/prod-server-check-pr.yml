@@ -9,17 +9,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: dev-server-check-${{ github.head_ref || github.ref }}
+  group: prod-server-check-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 env:
+  REMOTE_ENV : prod
   REMOTE_CHEMIN: ${{ secrets.REMOTE_CHEMIN }}
   ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
   ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
 
 jobs:
   dev-check:
-    name: Vérification connexion & dossier serveur
+    name: Vérification connexion & dossier serveur prod
     runs-on: ubuntu-latest
 
     steps:
@@ -40,7 +41,7 @@ jobs:
         id: path
         shell: bash
         run: |
-          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/prod/${ADRESSE_LOCAL#/}"
+          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/${REMOTE_ENV}/${ADRESSE_LOCAL#/}"
           echo "REMOTE_PATH=$REMOTE_PATH"
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
 
