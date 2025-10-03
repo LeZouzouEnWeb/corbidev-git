@@ -13,13 +13,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  REMOTE_ENV : homol
   REMOTE_CHEMIN: ${{ secrets.REMOTE_CHEMIN }}
   ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
   ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
 
 jobs:
   dev-check:
-    name: Vérification connexion & dossier serveur
+    name: Vérification connexion & dossier serveur homol
     runs-on: ubuntu-latest
 
     steps:
@@ -40,7 +41,7 @@ jobs:
         id: path
         shell: bash
         run: |
-          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/homol/${ADRESSE_LOCAL#/}"
+          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/${REMOTE_ENV}/${ADRESSE_LOCAL#/}"
           echo "REMOTE_PATH=$REMOTE_PATH"
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
 

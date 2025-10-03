@@ -2,7 +2,7 @@ name: 🔳 Dev Server Check (PR)
 
 on:
   pull_request:
-    branches: [ develop ]
+    branches: [ develop ] ]
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
@@ -13,13 +13,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  REMOTE_ENV : dev
   REMOTE_CHEMIN: ${{ secrets.REMOTE_CHEMIN }}
   ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
   ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
 
 jobs:
   dev-check:
-    name: Vérification connexion & dossier serveur
+    name: Vérification connexion & dossier serveur dev
     runs-on: ubuntu-latest
 
     steps:
@@ -40,7 +41,7 @@ jobs:
         id: path
         shell: bash
         run: |
-          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/dev/${ADRESSE_LOCAL#/}"
+          REMOTE_PATH="${REMOTE_CHEMIN%/}/${ADRESSE_GLOBAL%/}/${REMOTE_ENV}/${ADRESSE_LOCAL#/}"
           echo "REMOTE_PATH=$REMOTE_PATH"
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
 
