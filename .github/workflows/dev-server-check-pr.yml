@@ -2,7 +2,7 @@ name: 🔳 Dev Server Check (PR)
 
 on:
   pull_request:
-    branches: [ develop ] ]
+    branches: [ develop ]
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
