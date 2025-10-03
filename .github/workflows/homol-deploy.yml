@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REMOTE_ENV : homol
+  REMOTE_ENV: homol
   REMOTE_CHEMIN: ${{ secrets.REMOTE_CHEMIN }}
   ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
   ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
@@ -56,8 +56,8 @@ jobs:
           _glob="$(norm "$ADRESSE_GLOBAL")"
           _loca="$(norm "$ADRESSE_LOCAL")"
 
-          # Chemin attendu : REMOTE_CHEMIN/ADRESSE_GLOBAL/homol/ADRESSE_LOCAL
-          REMOTE_PATH="/${_remote}/${_glob}/  ${_env}/${_loca}"
+          # Chemin attendu : REMOTE_CHEMIN/ADRESSE_GLOBAL/ENV/ADRESSE_LOCAL
+          REMOTE_PATH="/${_remote}/${_glob}/${_env}/${_loca}"
           REMOTE_PATH="$(echo "$REMOTE_PATH" | sed -e 's#//*#/#g')"
 
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
