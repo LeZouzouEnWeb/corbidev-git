@@ -58,7 +58,7 @@ jobs:
           \ num);\n}\n\n// Si rien trouvé, on garde l'ancien titre dépollué.\nif (!tail)\
           \ {\n  tail = origTitle\n    .replace(/^[\\s\\[\\(\\{]*[^\\d#A-Z]*?/i, \"\
           \")\n    .replace(/^[\\s:_\\-\\/]+/, \" \")\n    .replace(/[\\/_\\-]+/g,\
-          \ \" \")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\n// Construit\
+          \ \" \")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\n// --- Post-traitement minimal pour corriger \"ticketerreur\" et ajouter \" - \" après le préfixe ---\ntail = tail\n  .replace(/^ticket\\b[\\s:_\\-\\/]+/i, '')\n  .replace(/^ticket(?=[A-Za-zÀ-ÿ])/i, '')\n  .replace(/^\\s+/, '')\n  .trim();\n\n// Déduire un préfixe textuel initial du titre (ex: \"Fixbug\") et insérer \" - \"\nconst catMatch = origTitle.match(/^\\s*([A-Za-z][A-Za-z0-9]*)\\s*[\\/:_\\-]/);\nif (catMatch) {\n  const cat = catMatch[1];\n  if (!new RegExp(`^${cat}\\\\b`, 'i').test(tail)) {\n    tail = `${cat} - ${tail}`.replace(/\\s+/g, ' ').trim();\n  } else {\n    tail = tail.replace(new RegExp(`^${cat}\\\\b[\\\\s:_\\\\-\\\\/]*`, 'i'), `${cat} - `);\n  }\n  tail = tail.replace(/\\s+/g, ' ').trim();\n}\n// --- Fin du post-traitement minimal ---\n\n// Construit\
           \ le nouveau titre\nconst newTitle = `[#${num}] ${tail}`.trim();\n\nif (newTitle\
           \ && newTitle !== origTitle) {\n  await github.rest.pulls.update({\n   \
           \ owner: context.repo.owner,\n    repo: context.repo.repo,\n    pull_number:\
