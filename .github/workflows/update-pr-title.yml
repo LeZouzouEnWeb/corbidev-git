@@ -1,137 +1,67 @@
-name: 🔄 Normalize PR title
-
-on:
+name: 🔄 Normalize PR title (#num → "[#num] rest of title")
+'on':
   pull_request:
-    types: [opened, edited, synchronize, ready_for_review, reopened]
-
+    types:
+    - opened
+    - edited
+    - synchronize
+    - ready_for_review
+    - reopened
 permissions:
   contents: read
   pull-requests: write
-
 jobs:
   update-title:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
-      - name: Normalize PR title to [#num] tail
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const pr = context.payload.pull_request;
-            if (!pr) {
-              core.info("No pull_request context; exiting.");
-              return;
-            }
-
-            const origTitle = pr.title || "";
-            const branch = (pr.head && pr.head.ref) ? pr.head.ref : "";
-
-            // If already normalized, exit
-            if (/^\s*\[#\d+\]\s+/.test(origTitle)) {
-              core.info("Title already normalized; nothing to do.");
-              return;
-            }
-
-            // Find first ticket number with its position (no named groups)
-            function findNumWithPos(s) {
-              if (!s) return null;
-
-              // Each pattern returns the matched number and its absolute index
-              const patterns = [
-                // #123
-                {
-                  re: /#(\d{1,8})\b/,
-                  get: (m) => {
-                    const num = m[1];
-                    const idx = m.index + m[0].lastIndexOf(num);
-                    return { num, index: idx, length: num.length };
-                  }
-                },
-                // ticket-123 / ticket 123 / ticket_123
-                {
-                  re: /ticket[-_\s]?(\d{1,8})\b/i,
-                  get: (m) => {
-                    const num = m[1];
-                    const idx = m.index + m[0].lastIndexOf(num);
-                    return { num, index: idx, length: num.length };
-                  }
-                },
-                // ABC-123
-                {
-                  re: /[A-Z][A-Z0-9_]*-(\d{1,8})\b/,
-                  get: (m) => {
-                    const num = m[1];
-                    const idx = m.index + m[0].lastIndexOf(num);
-                    return { num, index: idx, length: num.length };
-                  }
-                },
-                // 4/creer (number immediately before a slash)
-                {
-                  re: /(^|[^\d])(\d{1,8})(?=\s*\/)/,
-                  get: (m) => {
-                    const num = m[2];
-                    const idx = m.index + m[0].lastIndexOf(num);
-                    return { num, index: idx, length: num.length };
-                  }
-                },
-              ];
-
-              for (const p of patterns) {
-                const m = s.match(p.re);
-                if (m) return p.get(m);
-              }
-              return null;
-            }
-
-            // Prefer title, else branch
-            let found = findNumWithPos(origTitle) || findNumWithPos(branch);
-            if (!found) {
-              core.info("No ticket number found in title or branch; exiting.");
-              return;
-            }
-
-            const { num, index, length } = found;
-
-            // Tail = everything AFTER the number + separators
-            function tailAfterNumber(s, idx, len) {
-              if (!s) return "";
-              let after = s.slice(idx + len);
-              // drop immediate separators after number
-              after = after.replace(/^[\s_\-\/:]+/, "");
-              // normalize separators to single spaces
-              after = after
-                .replace(/[\/_\-:]+/g, " ")
-                .replace(/\s+/g, " ")
-                .trim();
-              return after;
-            }
-
-            // Try from title first, fallback to branch
-            let tail = tailAfterNumber(origTitle, index, length);
-            if (!tail) {
-              const f2 = findNumWithPos(branch);
-              if (f2) tail = tailAfterNumber(branch, f2.index, f2.length);
-            }
-            // If still empty, degrade gracefully from original title
-            if (!tail) {
-              tail = origTitle
-                .replace(/^[^\d#A-Z]+/i, "")
-                .replace(/^[\s_\-\/:]+/, "")
-                .replace(/[\/_\-:]+/g, " ")
-                .replace(/\s+/g, " ")
-                .trim();
-            }
-
-            const newTitle = `[#${num}] ${tail}`.trim();
-
-            if (newTitle && newTitle !== origTitle) {
-              await github.rest.pulls.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: pr.number,
-                title: newTitle,
-              });
-              core.info(`Title updated: "${origTitle}" → "${newTitle}"`);
-            } else {
-              core.info("No change applied to title.");
-            }
+    - name: Normalize PR title
+      uses: actions/github-script@v7
+      with:
+        script: "const pr = context.payload.pull_request;\nif (!pr) {\n  core.info(\"\
+          Pas de pull_request dans ce contexte.\");\n  return;\n}\n\nconst origTitle\
+          \ = pr.title || \"\";\nconst branch = pr.head && pr.head.ref ? pr.head.ref\
+          \ : \"\";\n\n// Si le titre est déjà normalisé [#123] ..., on sort.\nif\
+          \ (/^\\s*\\[#\\d+\\]\\s+/i.test(origTitle)) {\n  core.info(\"Le titre semble\
+          \ déjà normalisé, aucune action.\");\n  return;\n}\n\n// Recherche du numéro:\
+          \ priorités (#123) > ticket-123/ticket 123 > JIRA ABC-123 > nombre suivi\
+          \ d'un /\nfunction findTicketNum(s) {\n  if (!s) return null;\n  let m;\n\
+          \  m = s.match(/#(\\d{1,8})\\b/); if (m) return m[1];\n  m = s.match(/ticket[-_\\\
+          s]?(\\d{1,8})\\b/i); if (m) return m[1];\n  m = s.match(/[A-Z][A-Z0-9_]*-(\\\
+          d{1,8})\\b/); if (m) return m[1];\n  // Nombre avant un slash (ex: \"...\
+          \ 4/creer ...\" ou \"...ticket/4/..\")\n  m = s.match(/(^|[^\\d])(\\d{1,8})(?=\\\
+          s*\\/)/); if (m) return m[2];\n  return null;\n}\n\n// Dans quel texte chercher\
+          \ ? D'abord le titre, puis la branche\nconst num = findTicketNum(origTitle)\
+          \ || findTicketNum(branch);\nif (!num) {\n  core.info(\"Aucun numéro de\
+          \ ticket détecté dans le titre ni la branche.\");\n  return;\n}\n\n// Déduire\
+          \ la partie 'après le numéro' à partir du titre (ou de la branche si plus\
+          \ parlant).\nfunction tailAfterNumber(s, n) {\n  if (!s) return \"\";\n\
+          \  const idxHash = s.search(new RegExp(`#${n}\\b`));\n  const idxTicket\
+          \ = s.search(new RegExp(`ticket[-_\\s]?${n}\\b`, 'i'));\n  const idxJira\
+          \ = s.search(new RegExp(`[A-Z][A-Z0-9_]*-${n}\\b`));\n\n  // motif \"nombre\
+          \ suivi d'un /\"\n  const reNumSlash = new RegExp(`(^|[^\\d])(${n})(\\s*\\\
+          /)(.*)$`);\n\n  let after = \"\";\n  if (idxHash >= 0) {\n    after = s.slice(idxHash\
+          \ + (`#${n}`).length);\n  } else if (idxTicket >= 0) {\n    after = s.slice(idxTicket\
+          \ + (`ticket`.length + String(n).length + 1)); // approx; nettoyé plus bas\n\
+          \  } else if (idxJira >= 0) {\n    after = s.slice(idxJira + (s.match(new\
+          \ RegExp(`[A-Z][A-Z0-9_]*-${n}\\b`))[0].length));\n  } else if (reNumSlash.test(s))\
+          \ {\n    after = s.replace(reNumSlash, \"$4\");\n  } else {\n    // fallback\
+          \ : coupez avant le premier nombre trouvé et prenez ce qui suit\n    const\
+          \ reBefore = new RegExp(`^.*?${n}\\b[\\s_\\-\\/]*`);\n    after = s.replace(reBefore,\
+          \ \"\");\n  }\n\n  // Nettoyage: remplacer séparateurs par espaces, enlever\
+          \ préfixes communs\n  after = after\n    .replace(/^[\\s:_\\-\\/]+/, \"\
+          \ \")\n    .replace(/[\\/_\\-]+/g, \" \")\n    .replace(/\\s+/g, \" \")\n\
+          \    .trim();\n\n  return after;\n}\n\n// Utiliser le titre en priorité\
+          \ comme source du libellé après le numéro; sinon la branche.\nlet tail =\
+          \ tailAfterNumber(origTitle, num);\nif (!tail) {\n  tail = tailAfterNumber(branch,\
+          \ num);\n}\n\n// Si rien trouvé, on garde l'ancien titre dépollué.\nif (!tail)\
+          \ {\n  tail = origTitle\n    .replace(/^[\\s\\[\\(\\{]*[^\\d#A-Z]*?/i, \"\
+          \")\n    .replace(/^[\\s:_\\-\\/]+/, \" \")\n    .replace(/[\\/_\\-]+/g,\
+          \ \" \")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\n// Construit\
+          \ le nouveau titre\nconst newTitle = `[#${num}] ${tail}`.trim();\n\nif (newTitle\
+          \ && newTitle !== origTitle) {\n  await github.rest.pulls.update({\n   \
+          \ owner: context.repo.owner,\n    repo: context.repo.repo,\n    pull_number:\
+          \ pr.number,\n    title: newTitle\n  });\n  core.info(`Titre mis à jour:\
+          \ \"${origTitle}\" → \"${newTitle}\"`);\n} else {\n  core.info(\"Aucun changement\
+          \ appliqué au titre.\");\n}\n"
