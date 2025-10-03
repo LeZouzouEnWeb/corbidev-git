@@ -24,7 +24,7 @@ env:
 
 jobs:
   deploy:
-    name: Déployer sur le serveur dev
+    name: Déployer sur le serveur DEV
     if: ${{ github.event.pull_request.merged == true }} # uniquement si la PR a été mergée
     runs-on: ubuntu-latest
 
