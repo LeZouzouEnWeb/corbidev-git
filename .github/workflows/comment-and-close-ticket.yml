@@ -2,6 +2,7 @@ name: 📝 Comment commits on ticket & close it (on PR merge)
 
 on:
   pull_request:
+    branches: [ develop ]
     types: [closed]
 
 jobs:

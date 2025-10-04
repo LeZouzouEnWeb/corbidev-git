@@ -1,4 +1,4 @@
-name: 🚀 Homol Deploy (after PR)
+name: 🚀 Homol Mirror Deploy (after PR)
 
 on:
   pull_request:
@@ -23,8 +23,33 @@ env:
   SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
 jobs:
+  mirror_homol_to_main:
+    name: 🔁 Mirror develop → homol
+    if: >
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'homol' &&
+      github.event.pull_request.head.ref == 'develop'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 🤖 Checkout Homol (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Align main to homol (reset --hard + force-with-lease)
+        run: |
+          set -e
+          git fetch origin homol develop
+          git switch -C homol origin/homol
+          git reset --hard origin/develop
+          git push --force-with-lease origin homol
+          echo "✅ Miroir homol = develop effectué."
+
   deploy:
-    name: Déployer sur le serveur HOMOL
+    name: 🚀 Déployer sur le serveur Homol
+    needs: mirror_homol_to_main
     if: ${{ github.event.pull_request.merged == true }} # uniquement si la PR a été mergée
     runs-on: ubuntu-latest
 
