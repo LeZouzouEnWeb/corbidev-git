@@ -1,17 +1,26 @@
-name: 🚀 Prod Deploy Mirror (after PR)
+name: 🚀 Prod Mirror Deploy (after PR)
 
 on:
   pull_request:
     branches: [ main ]
     types: [ closed ] # déclenché quand la PR est fermée (on vérifie merged ci-dessous)
 
-# Permissions par défaut (lecture). Le job mirror ajustera en 'write' localement.
 permissions:
   contents: read
 
 concurrency:
   group: main-deploy-${{ github.event.pull_request.head.ref }}
   cancel-in-progress: true
+
+env:
+  REMOTE_ENV: prod
+  REMOTE_CHEMIN: ${{ secrets.REMOTE_CHEMIN }}
+  ADRESSE_GLOBAL: ${{ vars.ADRESSE_GLOBAL }}
+  ADRESSE_LOCAL: ${{ vars.ADRESSE_LOCAL }}
+  SFTP_HOST: ${{ secrets.SFTP_HOST }}
+  SFTP_USER: ${{ secrets.SFTP_USER }}
+  SFTP_PORT: ${{ secrets.SFTP_PORT }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
 jobs:
   mirror_homol_to_main:
@@ -24,70 +33,90 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout (full history)
+      - name: 🤖 Checkout (full history)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Align main to homol (reset --hard + force-with-lease)
         run: |
-          set -euo pipefail
+          set -e
           git fetch origin main homol
           git switch -C main origin/main
           git reset --hard origin/homol
           git push --force-with-lease origin main
+          echo "✅ Miroir main = homol effectué."
 
-  deploy_prod:
-    name: 🚀 Prod Deploy (after PR)
+  deploy:
+    name: 🚀 Déployer sur le serveur PROD
     needs: mirror_homol_to_main
-    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    if: ${{ github.event.pull_request.merged == true }} # uniquement si la PR a été mergée
     runs-on: ubuntu-latest
 
-    # ⚠️ Laisse ce bloc env tel quel si tu utilises déjà ces variables
-    # (SFTP_HOST, SFTP_USER, SFTP_PORT, REMOTE_PATH, etc.) via 'vars' et/ou 'secrets'.
-    # Si ton ancienne version mettait ces valeurs dans 'env:' au niveau du workflow,
-    # tu peux remonter ce bloc au niveau racine sans rien changer d'autre.
-    env:
-      # Exemples (dé-commente et adapte si nécessaire)
-      # SFTP_HOST: ${{ vars.SFTP_HOST }}
-      # SFTP_USER: ${{ vars.SFTP_USER }}
-      # SFTP_PORT: ${{ vars.SFTP_PORT }}
-      # REMOTE_PATH: ${{ vars.REMOTE_PATH }}
-      # RSYNC_EXTRA: ${{ vars.RSYNC_EXTRA }}
-      # SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      # KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
-      # ↑ garde la compatibilité avec ta version actuelle
-      # (nous n'imposons rien ici pour rester fidèle à ton YAML)
-      DUMMY_NOOP: noop
-
     steps:
-      - name: Checkout
+      - name: Vérifier variables requises
+        shell: bash
+        run: |
+          miss=0
+          for v in REMOTE_CHEMIN ADRESSE_GLOBAL ADRESSE_LOCAL SFTP_HOST SFTP_USER SSH_PRIVATE_KEY; do
+            if [ -z "${!v}" ]; then
+              echo "::error title=Variable manquante::$v n'est pas défini."
+              miss=1
+            else
+              echo "::notice title=Variable::$v=${!v}"
+            fi
+          done
+          [ "$miss" -eq 0 ] || exit 1
+
+      - name: Récupérer le code
         uses: actions/checkout@v4
 
-      # Optionnel si tu utilises une clé privée via secret
-      - name: Prepare SSH (optional if already set on runner)
-        if: ${{ env.SSH_PRIVATE_KEY != '' }}
+      - name: Construire le chemin distant normalisé (sans création)
+        id: path
+        shell: bash
         run: |
-          set -euo pipefail
+          norm() { printf "%s" "$1" | sed -e 's#//*#/#g' -e 's#^/##' -e 's#/$##'; }
+          _remote="$(norm "$REMOTE_CHEMIN")"
+          _env="$(norm "$REMOTE_ENV")"  
+          _glob="$(norm "$ADRESSE_GLOBAL")"
+          _loca="$(norm "$ADRESSE_LOCAL")"
+
+          # Chemin attendu : REMOTE_CHEMIN/ADRESSE_GLOBAL/ENV/ADRESSE_LOCAL
+          REMOTE_PATH="/${_remote}/${_glob}/${_env}/${_loca}"
+          REMOTE_PATH="$(echo "$REMOTE_PATH" | sed -e 's#//*#/#g')"
+
+          echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
+          echo "::notice title=REMOTE_PATH::$REMOTE_PATH"
+
+      - name: Préparer l’agent SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
+
+      - name: Ajout hôte dans known_hosts
+        shell: bash
+        run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          if [ -n "${KNOWN_HOSTS:-}" ]; then
-            echo "$KNOWN_HOSTS" >> ~/.ssh/known_hosts
-          fi
+          ssh-keyscan -p "${SFTP_PORT:-22}" "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: Rsync deploy
+      - name: Vérifier la connexion SSH
+        shell: bash
         run: |
-          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -p "${SFTP_PORT:-22}" "$SFTP_USER@$SFTP_HOST" "echo 'Connexion SSH OK'"
 
-          RSYNC_EXCLUDES=()
-          if [ -n "${RSYNC_EXTRA:-}" ]; then
-            # permet d'ajouter des options en plus depuis vars.RSYNC_EXTRA
-            # ex: --exclude node_modules --exclude .git
-            # shellcheck disable=SC2206
-            RSYNC_EXCLUDES=(${RSYNC_EXTRA})
-          fi
+      - name: Déployer les fichiers (rsync avec .rsync-ignore si présent)
+        shell: bash
+        run: |
+          REMOTE_PATH="${{ steps.path.outputs.REMOTE_PATH }}"
+          echo "Déploiement vers : $REMOTE_PATH"
 
+          # Fail si le dossier n'existe pas (on NE LE CREE PAS)
+          ssh -p "${SFTP_PORT:-22}" "$SFTP_USER@$SFTP_HOST" "[ -d \"$REMOTE_PATH\" ]" \
+            || { echo "::error title=Dossier distant manquant::Le dossier $REMOTE_PATH n'existe pas."; exit 1; }
+
+          # Prépare les exclusions (.rsync-ignore si présent)
+          RSYNC_EXCLUDES=(--exclude='.git/' --exclude='.github/')
           if [ -f ".rsync-ignore" ]; then
             echo "::notice title=rsync::Utilisation de .rsync-ignore"
             RSYNC_EXCLUDES+=(--exclude-from='.rsync-ignore')
@@ -96,6 +125,9 @@ jobs:
           fi
 
           # Synchronisation (idempotente) + suppression des fichiers retirés côté source
-          rsync -az --delete             "${RSYNC_EXCLUDES[@]}"             -e "ssh -p ${SFTP_PORT:-22}"             ./ "$SFTP_USER@$SFTP_HOST:$REMOTE_PATH/"
+          rsync -az --delete \
+            "${RSYNC_EXCLUDES[@]}" \
+            -e "ssh -p ${SFTP_PORT:-22}" \
+            ./ "$SFTP_USER@$SFTP_HOST:$REMOTE_PATH/"
 
           echo "✅ Déploiement terminé."
