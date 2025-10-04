@@ -1,0 +1,101 @@
+name: 🚀 Prod Deploy (after PR)
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [ closed ] # déclenché quand la PR est fermée (on vérifie merged ci-dessous)
+
+# Permissions par défaut (lecture). Le job mirror ajustera en 'write' localement.
+permissions:
+  contents: read
+
+concurrency:
+  group: main-deploy-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mirror_homol_to_main:
+    name: 🔁 Mirror homol → main
+    if: >
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'homol'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Align main to homol (reset --hard + force-with-lease)
+        run: |
+          set -euo pipefail
+          git fetch origin main homol
+          git switch -C main origin/main
+          git reset --hard origin/homol
+          git push --force-with-lease origin main
+
+  deploy_prod:
+    name: 🚀 Prod Deploy (after PR)
+    needs: mirror_homol_to_main
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+
+    # ⚠️ Laisse ce bloc env tel quel si tu utilises déjà ces variables
+    # (SFTP_HOST, SFTP_USER, SFTP_PORT, REMOTE_PATH, etc.) via 'vars' et/ou 'secrets'.
+    # Si ton ancienne version mettait ces valeurs dans 'env:' au niveau du workflow,
+    # tu peux remonter ce bloc au niveau racine sans rien changer d'autre.
+    env:
+      # Exemples (dé-commente et adapte si nécessaire)
+      # SFTP_HOST: ${{ vars.SFTP_HOST }}
+      # SFTP_USER: ${{ vars.SFTP_USER }}
+      # SFTP_PORT: ${{ vars.SFTP_PORT }}
+      # REMOTE_PATH: ${{ vars.REMOTE_PATH }}
+      # RSYNC_EXTRA: ${{ vars.RSYNC_EXTRA }}
+      # SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      # KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+      # ↑ garde la compatibilité avec ta version actuelle
+      # (nous n'imposons rien ici pour rester fidèle à ton YAML)
+      DUMMY_NOOP: noop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Optionnel si tu utilises une clé privée via secret
+      - name: Prepare SSH (optional if already set on runner)
+        if: ${{ env.SSH_PRIVATE_KEY != '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          if [ -n "${KNOWN_HOSTS:-}" ]; then
+            echo "$KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          fi
+
+      - name: Rsync deploy
+        run: |
+          set -euo pipefail
+
+          RSYNC_EXCLUDES=()
+          if [ -n "${RSYNC_EXTRA:-}" ]; then
+            # permet d'ajouter des options en plus depuis vars.RSYNC_EXTRA
+            # ex: --exclude node_modules --exclude .git
+            # shellcheck disable=SC2206
+            RSYNC_EXCLUDES=(${RSYNC_EXTRA})
+          fi
+
+          if [ -f ".rsync-ignore" ]; then
+            echo "::notice title=rsync::Utilisation de .rsync-ignore"
+            RSYNC_EXCLUDES+=(--exclude-from='.rsync-ignore')
+          else
+            echo "::notice title=rsync::Aucun .rsync-ignore trouvé à la racine du dépôt"
+          fi
+
+          # Synchronisation (idempotente) + suppression des fichiers retirés côté source
+          rsync -az --delete             "${RSYNC_EXCLUDES[@]}"             -e "ssh -p ${SFTP_PORT:-22}"             ./ "$SFTP_USER@$SFTP_HOST:$REMOTE_PATH/"
+
+          echo "✅ Déploiement terminé."
