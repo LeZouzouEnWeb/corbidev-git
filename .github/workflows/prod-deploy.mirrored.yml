@@ -1,4 +1,4 @@
-name: 🚀 Prod Deploy (after PR)
+name: 🚀 Prod Deploy Mirror (after PR)
 
 on:
   pull_request:
