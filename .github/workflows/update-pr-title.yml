@@ -1,4 +1,4 @@
-name: 🔄 Normalize PR title (#num → "[#num] rest of title")
+name: 🔄 Set PR title 
 
 on:
   pull_request:
@@ -15,115 +15,61 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - name: Normalize PR title
+      - name: Set PR title from branch
         uses: actions/github-script@v7
         with:
           script: |
             const pr = context.payload.pull_request;
-            if (!pr) {
-              core.info("Pas de pull_request dans ce contexte.");
-              return;
-            }
+            if (!pr) return;
 
-            const origTitle = pr.title || "";
             const branch = pr.head?.ref || "";
+            const origTitle = pr.title || "";
 
-            // Déjà normalisé ? [#123] ...
-            if (/^\s*\[#\d+\]\s+/i.test(origTitle)) {
-              core.info("Le titre semble déjà normalisé, aucune action.");
+            // 1️⃣ Nettoyage de base
+            let base = branch.replace(/[_/]+/g, " ").replace(/\s+/g, " ").trim();
+
+            // 2️⃣ Si déjà au format [#123], on sort
+            if (/^\s*\[#\d+\]\s+/i.test(base)) {
+              core.info("Déjà normalisé, aucun changement.");
               return;
             }
 
-            // 1) Détection du numéro (#123 > ticket-123|ticket 123 > ABC-123 > '... 123/...').
-            function findTicketNum(s) {
-              if (!s) return null;
-              let m;
-              m = s.match(/#(\d{1,8})\b/);                if (m) return m[1];
-              m = s.match(/ticket[-_\s]?(\d{1,8})\b/i);    if (m) return m[1];
-              m = s.match(/[A-Z][A-Z0-9_]*-(\d{1,8})\b/);  if (m) return m[1];
-              m = s.match(/(^|[^\d])(\d{1,8})(?=\s*\/)/);  if (m) return m[2];
-              return null;
+            // 3️⃣ Recherche du numéro de ticket
+            const m = branch.match(/ticket[-_\s]?(\d{1,8})\b/i);
+            let num = null;
+            if (m) num = m[1];
+
+            // 4️⃣ Retirer le token ticket-xxx de la base
+            base = base.replace(/\bticket[-_\s]?\d{1,8}\b/i, "").trim();
+
+            // 5️⃣ Re-nettoyer les espaces
+            base = base.replace(/\s+/g, " ");
+
+            // 6️⃣ Déterminer si un préfixe de type "feature" existe
+            const prefixMatch = base.match(/^(feature|fix|hotfix|bugfix|release|chore|task|refactor)\b/i);
+            let prefix = "";
+            let label = base;
+
+            if (prefixMatch) {
+              prefix = prefixMatch[1].toLowerCase();
+              label = base.replace(new RegExp("^" + prefix + "\\b\\s*"), "").trim();
             }
 
-            const num = findTicketNum(origTitle) || findTicketNum(branch);
-            if (!num) {
-              core.info("Aucun numéro détecté dans le titre/branche.");
-              return;
-            }
-
-            // 2) Extraire la partie 'après le numéro'
-            function tailAfterNumber(s, n) {
-              if (!s) return "";
-              const idxHash   = s.search(new RegExp(`#${n}\\b`));
-              const idxTicket = s.search(new RegExp(`ticket[-_\\s]?${n}\\b`, "i"));
-              const idxJira   = s.search(new RegExp(`[A-Z][A-Z0-9_]*-${n}\\b`));
-
-              const reNumSlash = new RegExp(`(^|[^\\d])(${n})(\\s*\\/)(.*)$`);
-
-              let after = "";
-              if (idxHash >= 0) {
-                after = s.slice(idxHash + (`#${n}`).length);
-              } else if (idxTicket >= 0) {
-                // "ticket{sep}{n}" → coupe ici, on nettoiera ensuite
-                after = s.slice(idxTicket + ("ticket".length + String(n).length + 1));
-              } else if (idxJira >= 0) {
-                const m = s.match(new RegExp(`[A-Z][A-Z0-9_]*-${n}\\b`));
-                after = s.slice(idxJira + (m ? m[0].length : 0));
-              } else if (reNumSlash.test(s)) {
-                after = s.replace(reNumSlash, "$4");
+            // 7️⃣ Construction du titre
+            let newTitle;
+            if (num) {
+              if (prefix) {
+                newTitle = `[#${num}] ${prefix} - ${label}`;
               } else {
-                // fallback: supprime tout jusqu'au n° et prend la suite
-                const reBefore = new RegExp(`^.*?${n}\\b[\\s_\\-\\/]*`);
-                after = s.replace(reBefore, "");
+                newTitle = `[#${num}] - ${label}`;
               }
-
-              // Nettoyage séparateurs
-              after = after
-                .replace(/^[\s:_\-\/]+/, " ")
-                .replace(/[\/_\-]+/g, " ")
-                .replace(/\s+/g, " ")
-                .trim();
-
-              return after;
+            } else {
+              newTitle = base;
             }
 
-            let tail = tailAfterNumber(origTitle, num);
-            if (!tail) tail = tailAfterNumber(branch, num);
-            if (!tail) {
-              tail = origTitle
-                .replace(/^[\s\[\(\{]*[^\d#A-Z]*?/i, "")
-                .replace(/^[\s:_\-\/]+/, " ")
-                .replace(/[\/_\-]+/g, " ")
-                .replace(/\s+/g, " ")
-                .trim();
-            }
+            newTitle = newTitle.trim();
 
-            // 3) SUPPRIMER "ticket" PARTOUT (début, après séparateur, OU collé au mot suivant)
-            //    - ex: "ticket-48", "ticket 48", "ticketErreur" → tous supprimés.
-            tail = tail
-              // cas séparé: début OU après séparateur
-              .replace(/(^|[\s:_\-\/])ticket\b(?:[-_\/\s]+)?/gi, " ")
-              // cas collé au mot suivant (ticketerreur)
-              .replace(/(^|[\s:_\-\/])ticket(?=[A-Za-zÀ-ÿ])/gi, " ")
-              .replace(/\s+/g, " ")
-              .trim();
-
-            // 4) Récupérer le préfixe (ex: "Fixbug") au début du titre d'origine avant un séparateur
-            const catMatch = origTitle.match(/^\s*([A-Za-z][A-Za-z0-9]*)\s*[\/:_\-]/);
-            if (catMatch) {
-              const cat = catMatch[1];
-              const reBeginsWithCat = new RegExp("^" + cat + "\\b", "i");
-              if (!reBeginsWithCat.test(tail)) {
-                tail = (cat + " - " + tail).replace(/\s+/g, " ").trim();
-              } else {
-                const reCatSep = new RegExp("^" + cat + "\\b[\\s:_\\-\\/]*", "i");
-                tail = tail.replace(reCatSep, cat + " - ");
-              }
-              tail = tail.replace(/\s+/g, " ").trim();
-            }
-
-            const newTitle = `[#${num}] ${tail}`.trim();
-
+            // 8️⃣ Mise à jour du titre si différent
             if (newTitle && newTitle !== origTitle) {
               await github.rest.pulls.update({
                 owner: context.repo.owner,
