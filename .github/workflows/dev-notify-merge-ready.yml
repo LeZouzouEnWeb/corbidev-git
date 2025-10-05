@@ -1,13 +1,13 @@
-name: 📢 Notify when PR is merge-ready
+name: 📢 Dev Notify Merge Ready
 
 on:
-  # Se déclenche quand les checks (CodeQL, etc.) finissent
+  # ✅ Toujours visible dans Actions + déclenché à chaque check suite terminé
   check_suite:
-    types: [completed]
-  workflow_run:
     branches: [ develop ]
     types: [completed]
-    workflows: ["🔣 CodeQL", "🔳 Dev Server Check (PR)", "🔄 Set PR title", "🔗 Link issues to PR (dynamic)"] # adapte les noms si besoin
+
+  # ✅ Déclenchement manuel depuis l'onglet Actions
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,16 +26,14 @@ jobs:
             const owner = context.repo.owner;
             const repo  = context.repo.repo;
 
-            // Récupère le SHA concerné par l’événement (check_suite OU workflow_run)
-            const sha =
-              context.payload?.check_suite?.head_sha ??
-              context.payload?.workflow_run?.head_sha;
+            // 🔍 Récupère le SHA du commit concerné
+            const sha = context.payload?.check_suite?.head_sha ?? context.sha;
             if (!sha) {
               core.info("No SHA found for this event.");
               return;
             }
 
-            // PR(s) associée(s) à ce commit
+            // 🔗 Liste les PRs associées à ce commit
             const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
               owner, repo, commit_sha: sha
             });
@@ -44,12 +42,12 @@ jobs:
               return;
             }
 
-            // Fonction utilitaire: vérifie l’état des checks + mergeable_state
+            // 🧠 Vérifie si la PR est mergeable et si tous les checks sont verts
             async function isMergeReady(pr) {
-              // 1) Checks API (GitHub Checks)
               const checks = await github.rest.checks.listForRef({
                 owner, repo, ref: pr.head.sha, per_page: 100
               });
+
               const anyInProgress = checks.data.check_runs.some(r =>
                 ["queued","in_progress","requested"].includes(r.status)
               );
@@ -60,19 +58,19 @@ jobs:
               );
               if (anyFailed) return false;
 
-              // 2) Legacy statuses (pour actions anciennes)
               const combined = await github.rest.repos.getCombinedStatusForRef({
                 owner, repo, ref: pr.head.sha
               });
-              if (combined.data.state !== "success" && combined.data.state !== "no_status") return false;
+              if (!["success","no_status"].includes(combined.data.state)) return false;
 
-              // 3) Mergeability (GitHub recalcule en arrière-plan, on relit la PR)
-              const prFull = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
-              // "clean" => mergeable, "unstable" peut être mergeable si pas de règles strictes
-              const okStates = new Set(["clean", "has_hooks", "unstable"]);
+              const prFull = await github.rest.pulls.get({
+                owner, repo, pull_number: pr.number
+              });
+              const okStates = new Set(["clean","has_hooks","unstable"]);
               return prFull.data.mergeable === true && okStates.has(prFull.data.mergeable_state);
             }
 
+            // 💬 Commente sur chaque PR prête à être mergée
             for (const pr of prs.data.filter(p => p.state === "open")) {
               const mergeReady = await isMergeReady(pr);
               if (!mergeReady) {
@@ -80,7 +78,6 @@ jobs:
                 continue;
               }
 
-              // Anti-spam : ne commente qu’une fois par SHA
               const marker = `<!-- merge-ready:${sha} -->`;
               const existing = await github.rest.issues.listComments({
                 owner, repo, issue_number: pr.number, per_page: 100
@@ -92,9 +89,9 @@ jobs:
               }
 
               const body = `${marker}
-              ✅ **Merge maintenant possible**  
-              Tous les contrôles sont au vert pour \`${sha.substring(0,7)}\`.  
-              _This is an automated message._`;
+✅ **Merge maintenant possible**
+Tous les contrôles sont au vert pour \`${sha.substring(0,7)}\`.
+_This is an automated message._`;
 
               await github.rest.issues.createComment({
                 owner, repo, issue_number: pr.number, body
