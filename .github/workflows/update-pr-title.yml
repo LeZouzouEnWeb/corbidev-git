@@ -15,7 +15,7 @@ permissions:
 jobs:
   update_title_pr:
     if: github.event_name == 'pull_request'
-    name: Set PR title / update-title
+    name: update-title
     runs-on: ubuntu-latest
     steps:
       - name: Update PR title from branch name
@@ -23,27 +23,20 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request;
-            if (!pr) {
-              core.info("No PR payload found.");
-              return;
-            }
+            if (!pr) { core.info("No PR payload found."); return; }
             const origTitle = pr.title || "";
             const branch = pr.head.ref || "";
             core.info(`Original title: "${origTitle}" | Branch: "${branch}"`);
 
-            // Build new title from branch:
-            // 1) Replace underscores and slashes with spaces
+            // Replace underscores and slashes with spaces
             let newTitle = branch.replace(/[_/]+/g, " ").trim();
 
-            // 2) Prefix with [#xxx] if 'ticket-xxx' exists anywhere
+            // Prefix with [#xxx] if 'ticket-xxx' exists
             const ticketMatch = branch.match(/ticket[-_]?([0-9]+)/i);
             if (ticketMatch) {
               const ticket = ticketMatch[1];
-              // Remove any leading 'ticket-xxx' token left in the string
               newTitle = newTitle.replace(/\b(ticket[-_]?\d+)\b/i, "").trim();
               if (newTitle.startsWith("-")) newTitle = newTitle.slice(1).trim();
-              // Optionally keep the high-level category (e.g., 'feature') if present at start
-              // Build final title
               if (/^feature\b/i.test(branch)) {
                 newTitle = `[#${ticket}] feature - ${newTitle}`.trim();
               } else {
@@ -51,7 +44,6 @@ jobs:
               }
             }
 
-            // Final trim and collapse spaces
             newTitle = newTitle.replace(/\s{2,}/g, " ").trim();
 
             if (newTitle && newTitle !== origTitle) {
@@ -68,7 +60,7 @@ jobs:
 
   seed_required_check_for_main:
     if: github.event_name == 'push' && github.ref_name == 'main'
-    name: Set PR title / update-title
+    name: update-title
     runs-on: ubuntu-latest
     steps:
       - run: echo "Seeding required check for branch protection (push on main)."
