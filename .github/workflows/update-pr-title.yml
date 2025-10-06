@@ -1,4 +1,4 @@
-name: 🔄 Set PR title
+name: Set-PR-title
 
 on:
   pull_request:
