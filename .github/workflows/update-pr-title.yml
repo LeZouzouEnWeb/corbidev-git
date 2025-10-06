@@ -10,8 +10,6 @@ permissions:
   pull-requests: write
 
 jobs:
-  dev-check:
-    name: Set-PR-title
   update-title:
     runs-on: ubuntu-latest
     permissions:
