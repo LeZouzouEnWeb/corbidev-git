@@ -1,75 +1,59 @@
-name: Set-PR-title
+name: Set PR title
 
 on:
   pull_request:
-    branches: [ develop ]
+    branches: [develop, homol, main]
     types: [opened, edited, synchronize, ready_for_review, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  update-title:
+  update_title_pr:
+    if: github.event_name == 'pull_request'
+    name: Set PR title / update-title
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
     steps:
-      - name: Set PR title from branch
+      - name: Update PR title from branch name
         uses: actions/github-script@v7
         with:
           script: |
             const pr = context.payload.pull_request;
-            if (!pr) return;
-
-            const branch = pr.head?.ref || "";
-            const origTitle = pr.title || "";
-
-            // 1️⃣ Nettoyage de base
-            let base = branch.replace(/[_/]+/g, " ").replace(/\s+/g, " ").trim();
-
-            // 2️⃣ Si déjà au format [#123], on sort
-            if (/^\s*\[#\d+\]\s+/i.test(base)) {
-              core.info("Déjà normalisé, aucun changement.");
+            if (!pr) {
+              core.info("No PR payload found.");
               return;
             }
+            const origTitle = pr.title || "";
+            const branch = pr.head.ref || "";
+            core.info(`Original title: "${origTitle}" | Branch: "${branch}"`);
 
-            // 3️⃣ Recherche du numéro de ticket
-            const m = branch.match(/ticket[-_\s]?(\d{1,8})\b/i);
-            let num = null;
-            if (m) num = m[1];
+            // Build new title from branch:
+            // 1) Replace underscores and slashes with spaces
+            let newTitle = branch.replace(/[_/]+/g, " ").trim();
 
-            // 4️⃣ Retirer le token ticket-xxx de la base
-            base = base.replace(/\bticket[-_\s]?\d{1,8}\b/i, "").trim();
-
-            // 5️⃣ Re-nettoyer les espaces
-            base = base.replace(/\s+/g, " ");
-
-            // 6️⃣ Déterminer si un préfixe de type "feature" existe
-            const prefixMatch = base.match(/^(feature|fix|hotfix|bugfix|release|chore|task|refactor)\b/i);
-            let prefix = "";
-            let label = base;
-
-            if (prefixMatch) {
-              prefix = prefixMatch[1].toLowerCase();
-              label = base.replace(new RegExp("^" + prefix + "\\b\\s*"), "").trim();
-            }
-
-            // 7️⃣ Construction du titre
-            let newTitle;
-            if (num) {
-              if (prefix) {
-                newTitle = `[#${num}] ${prefix} - ${label}`;
+            // 2) Prefix with [#xxx] if 'ticket-xxx' exists anywhere
+            const ticketMatch = branch.match(/ticket[-_]?([0-9]+)/i);
+            if (ticketMatch) {
+              const ticket = ticketMatch[1];
+              // Remove any leading 'ticket-xxx' token left in the string
+              newTitle = newTitle.replace(/\b(ticket[-_]?\d+)\b/i, "").trim();
+              if (newTitle.startsWith("-")) newTitle = newTitle.slice(1).trim();
+              // Optionally keep the high-level category (e.g., 'feature') if present at start
+              // Build final title
+              if (/^feature\b/i.test(branch)) {
+                newTitle = `[#${ticket}] feature - ${newTitle}`.trim();
               } else {
-                newTitle = `[#${num}] - ${label}`;
+                newTitle = `[#${ticket}] - ${newTitle}`.trim();
               }
-            } else {
-              newTitle = base;
             }
 
-            newTitle = newTitle.trim();
+            // Final trim and collapse spaces
+            newTitle = newTitle.replace(/\s{2,}/g, " ").trim();
 
-            // 8️⃣ Mise à jour du titre si différent
             if (newTitle && newTitle !== origTitle) {
               await github.rest.pulls.update({
                 owner: context.repo.owner,
@@ -81,3 +65,10 @@ jobs:
             } else {
               core.info("Aucun changement appliqué au titre.");
             }
+
+  seed_required_check_for_main:
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    name: Set PR title / update-title
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Seeding required check for branch protection (push on main)."
