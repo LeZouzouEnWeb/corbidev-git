@@ -5,7 +5,6 @@ on:
   check_suite:
     types: [completed]
   workflow_run:
-    branches: [ develop ]
     types: [completed]
     workflows: ["🔣 CodeQL", "🔳 Dev Server Check (PR)", "🔄 Set PR title", "🔗 Link issues to PR (dynamic)"] # adapte les noms si besoin
 
