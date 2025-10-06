@@ -92,9 +92,9 @@ jobs:
               }
 
               const body = `${marker}
-✅ **Merge maintenant possible**  
-Tous les contrôles sont au vert pour \`${sha.substring(0,7)}\`.  
-_This is an automated message._`;
+            ✅ **Merge maintenant possible**  
+             Tous les contrôles sont au vert pour \`${sha.substring(0,7)}\`.  
+             _This is an automated message._`;
 
               await github.rest.issues.createComment({
                 owner, repo, issue_number: pr.number, body
