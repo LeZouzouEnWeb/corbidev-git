@@ -1,0 +1,102 @@
+name: 🟢 Notify when PR is merge-ready
+
+on:
+  # Se déclenche quand les checks (CodeQL, etc.) finissent
+  check_suite:
+    types: [completed]
+  workflow_run:
+    types: [completed]
+    workflows: ["🔣 CodeQL", "🔳 Dev Server Check (PR)", "🔄 Set PR title", "🔗 Link issues to PR (dynamic)"] # adapte les noms si besoin
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment if merge is now possible
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            // Récupère le SHA concerné par l’événement (check_suite OU workflow_run)
+            const sha =
+              context.payload?.check_suite?.head_sha ??
+              context.payload?.workflow_run?.head_sha;
+            if (!sha) {
+              core.info("No SHA found for this event.");
+              return;
+            }
+
+            // PR(s) associée(s) à ce commit
+            const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner, repo, commit_sha: sha
+            });
+            if (!prs.data.length) {
+              core.info(`No PR found for commit ${sha}.`);
+              return;
+            }
+
+            // Fonction utilitaire: vérifie l’état des checks + mergeable_state
+            async function isMergeReady(pr) {
+              // 1) Checks API (GitHub Checks)
+              const checks = await github.rest.checks.listForRef({
+                owner, repo, ref: pr.head.sha, per_page: 100
+              });
+              const anyInProgress = checks.data.check_runs.some(r =>
+                ["queued","in_progress","requested"].includes(r.status)
+              );
+              if (anyInProgress) return false;
+
+              const anyFailed = checks.data.check_runs.some(r =>
+                ["failure","timed_out","cancelled","action_required","stale"].includes(r.conclusion ?? "")
+              );
+              if (anyFailed) return false;
+
+              // 2) Legacy statuses (pour actions anciennes)
+              const combined = await github.rest.repos.getCombinedStatusForRef({
+                owner, repo, ref: pr.head.sha
+              });
+              if (combined.data.state !== "success" && combined.data.state !== "no_status") return false;
+
+              // 3) Mergeability (GitHub recalcule en arrière-plan, on relit la PR)
+              const prFull = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+              // "clean" => mergeable, "unstable" peut être mergeable si pas de règles strictes
+              const okStates = new Set(["clean", "has_hooks", "unstable"]);
+              return prFull.data.mergeable === true && okStates.has(prFull.data.mergeable_state);
+            }
+
+            for (const pr of prs.data.filter(p => p.state === "open")) {
+              const mergeReady = await isMergeReady(pr);
+              if (!mergeReady) {
+                core.info(`PR #${pr.number} not merge-ready yet.`);
+                continue;
+              }
+
+              // Anti-spam : ne commente qu’une fois par SHA
+              const marker = `<!-- merge-ready:${sha} -->`;
+              const existing = await github.rest.issues.listComments({
+                owner, repo, issue_number: pr.number, per_page: 100
+              });
+              const already = existing.data.some(c => c.body?.includes(marker));
+              if (already) {
+                core.info(`Already commented for ${sha} on PR #${pr.number}.`);
+                continue;
+              }
+
+              const body = `${marker}
+            ✅ **Merge maintenant possible**  
+             Tous les contrôles sont au vert pour \`${sha.substring(0,7)}\`.  
+             _This is an automated message._`;
+
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: pr.number, body
+              });
+              core.info(`Commented on PR #${pr.number}.`);
+            }
