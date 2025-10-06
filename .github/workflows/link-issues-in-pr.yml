@@ -1,4 +1,4 @@
-name: 🔗 Link issues to PR (dynamic)
+name: "🔗 Link issues to PR (dynamic)" 
 
 on:
   pull_request:
@@ -10,6 +10,9 @@ permissions:
   pull-requests: write
 
 jobs:
+  dev-check:
+    name: "🔗 Link issues to PR (dynamic)"
+
   link:
     runs-on: ubuntu-latest
     steps:

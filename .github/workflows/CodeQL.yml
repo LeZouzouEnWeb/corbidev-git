@@ -1,4 +1,4 @@
-name: 🔣 CodeQL
+name: "🔣 CodeQL"
 
 on:
   push:
@@ -14,6 +14,9 @@ permissions:
   actions: read
 
 jobs:
+  dev-check:
+    name: "🔣 CodeQL"    
+
   codeql:
     runs-on: ubuntu-latest
     timeout-minutes: 60
