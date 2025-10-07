@@ -1,4 +1,4 @@
-name: "📝 Comment commits on ticket & close it (on PR merge)"
+name: 📝 Comment commits on ticket and close
 
 on:
   pull_request:
@@ -6,9 +6,6 @@ on:
     types: [closed]
 
 jobs:
-  dev-check:
-    name: "📝 Comment commits on ticket & close it (on PR merge)"
-
   comment-and-close:
     # Ne s'exécute que si la PR est mergée
     if: github.event.pull_request.merged == true
