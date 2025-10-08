@@ -1,0 +1,46 @@
+name: 🚫 Blocage des push directs sur branches protegees
+
+on:
+  push:
+    branches:
+      - develop
+      - homol
+      - main
+
+# Pas de permissions spéciales nécessaires
+permissions: {}
+
+concurrency:
+  group: block-direct-push-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  block_direct_push:
+    runs-on: ubuntu-latest
+
+    # ✅ Autoriser :
+    #   - web-flow (GitHub quand tu merges une PR : merge / squash / rebase)
+    #   - github-actions[bot] (si un workflow pousse du code)
+    #   - dependabot[bot] (si tu utilises Dependabot)
+    # ❌ Tout le reste est considéré comme push direct interdit
+    if: >
+      !(
+        github.actor == 'web-flow' ||
+        github.actor == 'github-actions[bot]' ||
+        github.actor == 'dependabot[bot]'
+      )
+
+    steps:
+      - name: Bloquer le push direct
+        run: |
+          echo "### Contrôle push direct" >> "$GITHUB_STEP_SUMMARY"
+          echo "🚫 Push direct interdit sur \`${{ github.ref_name }}\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "👉 Merci d'ouvrir une *Pull Request* depuis une branche \`feature/...\` vers \`${{ github.ref_name }}\`." >> "$GITHUB_STEP_SUMMARY"
+          echo ""
+          echo "🔎 Détails :"
+          echo "• Branch : ${{ github.ref_name }}"
+          echo "• Pusher : ${{ github.actor }}"
+          echo "• Commit  : ${{ github.sha }}"
+          echo ""
+          echo "🚫 Push direct interdit. Utilise une Pull Request."
+          exit 1
