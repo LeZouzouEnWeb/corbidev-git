@@ -13,7 +13,7 @@ jobs:
   link:
     runs-on: ubuntu-latest
     steps:
-      - name: Detect & link issues in PR body
+      - name: Detecter et lier les tickets dans la PR
         uses: actions/github-script@v7
         with:
           script: |

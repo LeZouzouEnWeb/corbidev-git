@@ -24,7 +24,7 @@ env:
 
 jobs:
   mirror_homol_to_main:
-    name: 🔁 Miroir homol → main
+    name: 🔁 Miroir homol -> main
     if: >
       github.event.pull_request.merged == true &&
       github.event.pull_request.base.ref == 'main' &&
@@ -33,12 +33,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: 🤖 Checkout (full history)
+      - name: 🤖 Recuperer le depot (historique complet)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Align main to homol (reset --hard + force-with-lease)
+      - name: Aligner main sur homol (reset --hard + force-with-lease)
         run: |
           set -e
           git fetch origin main homol
@@ -48,7 +48,7 @@ jobs:
           echo "✅ Miroir main = homol effectué."
 
   deploy:
-    name: 🚀 Déployer sur le serveur PROD
+    name: 🚀 Deployer sur le serveur PROD
     needs: mirror_homol_to_main
     if: ${{ github.event.pull_request.merged == true }} # uniquement si la PR a été mergée
     runs-on: ubuntu-latest
@@ -88,7 +88,7 @@ jobs:
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
           echo "::notice title=REMOTE_PATH::$REMOTE_PATH"
 
-      - name: Preparer l’agent SSH
+      - name: Preparer l'agent SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}

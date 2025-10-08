@@ -63,7 +63,7 @@ jobs:
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
           echo "::notice title=REMOTE_PATH::$REMOTE_PATH"
 
-      - name: Preparer l’agent SSH
+      - name: Preparer l'agent SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}

@@ -31,7 +31,7 @@ jobs:
       )
 
     steps:
-      - name: Block direct push
+      - name: Bloquer le push direct
         run: |
           echo "### Contrôle push direct" >> "$GITHUB_STEP_SUMMARY"
           echo "🚫 Push direct interdit sur \`${{ github.ref_name }}\`." >> "$GITHUB_STEP_SUMMARY"

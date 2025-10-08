@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   gate:
-    name: Vérifier la source de la PR
+    name: Verifier la source de la PR
     runs-on: ubuntu-latest
 
     steps:

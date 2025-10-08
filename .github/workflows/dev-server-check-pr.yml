@@ -20,7 +20,7 @@ env:
 
 jobs:
   dev-check:
-    name: Vérification connexion & dossier serveur dev
+    name: Verification connexion & dossier serveur dev
     runs-on: ubuntu-latest
 
     steps:
@@ -45,7 +45,7 @@ jobs:
           echo "REMOTE_PATH=$REMOTE_PATH"
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Setup SSH
+      - name: Configurer SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
