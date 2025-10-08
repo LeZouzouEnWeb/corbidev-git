@@ -1,4 +1,4 @@
-name: 🔄 Update PR litle 
+name: 🔄 Update PR title
 
 on:
   pull_request:
@@ -25,51 +25,69 @@ jobs:
             const branch = pr.head?.ref || "";
             const origTitle = pr.title || "";
 
-            // 1️⃣ Nettoyage de base
-            let base = branch.replace(/[_/]+/g, " ").replace(/\s+/g, " ").trim();
+            // 1️⃣ Nettoyage de base (hyphens, underscores, slashes → espaces)
+            const cleanBranch = branch
+              .replace(/[-_/]+/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
 
-            // 2️⃣ Si déjà au format [#123], on sort
-            if (/^\s*\[#\d+\]\s+/i.test(base)) {
-              core.info("Déjà normalisé, aucun changement.");
+            // 2️⃣ Si le titre est déjà normalisé, on sort
+            if (/^\s*\[#\d+\]\s+/i.test(origTitle)) {
+              core.info("Titre déjà normalisé, aucun changement.");
               return;
             }
 
             // 3️⃣ Recherche du numéro de ticket
-            const m = branch.match(/ticket[-_\s]?(\d{1,8})\b/i);
-            let num = null;
-            if (m) num = m[1];
+            const ticketMatch = branch.match(/ticket[-_\s]?(\d{1,8})\b/i);
+            const num = ticketMatch ? ticketMatch[1] : null;
 
-            // 4️⃣ Retirer le token ticket-xxx de la base
-            base = base.replace(/\bticket[-_\s]?\d{1,8}\b/i, "").trim();
-
-            // 5️⃣ Re-nettoyer les espaces
-            base = base.replace(/\s+/g, " ");
-
-            // 6️⃣ Déterminer si un préfixe de type "feature" existe
-            const prefixMatch = base.match(/^(feature|fix|hotfix|bugfix|release|chore|task|refactor)\b/i);
             let prefix = "";
-            let label = base;
+            let label = cleanBranch;
 
-            if (prefixMatch) {
-              prefix = prefixMatch[1].toLowerCase();
-              label = base.replace(new RegExp("^" + prefix + "\\b\\s*"), "").trim();
-            }
-
-            // 7️⃣ Construction du titre
-            let newTitle;
             if (num) {
-              if (prefix) {
-                newTitle = `[#${num}] ${prefix} - ${label}`;
+              const cleanTicketRe = /\bticket\s*\d{1,8}\b/i;
+              const cleanTicketMatch = cleanTicketRe.exec(cleanBranch);
+              if (cleanTicketMatch) {
+                const before = cleanBranch.slice(0, cleanTicketMatch.index).trim();
+                const after = cleanBranch.slice(cleanTicketMatch.index + cleanTicketMatch[0].length).trim();
+
+                if (after) {
+                  prefix = before;
+                  label = after;
+                } else if (before) {
+                  label = before;
+                }
               } else {
-                newTitle = `[#${num}] - ${label}`;
+                label = cleanBranch.replace(cleanTicketRe, "").trim() || cleanBranch;
               }
-            } else {
-              newTitle = base;
             }
 
-            newTitle = newTitle.trim();
+            // 4️⃣ Détection d'un préfixe standard si non trouvé
+            if (!prefix) {
+              const prefixMatch = label.match(/^(feature|fix|hotfix|bugfix|release|chore|task|refactor)\b/i);
+              if (prefixMatch) {
+                prefix = prefixMatch[1].toLowerCase();
+                label = label.replace(new RegExp("^" + prefixMatch[0] + "\\b\\s*"), "").trim();
+              }
+            }
 
-            // 8️⃣ Mise à jour du titre si différent
+            // 5️⃣ Nettoyage final des segments
+            prefix = prefix.replace(/\s+/g, " ").trim();
+            label = label.replace(/\s+/g, " ").trim();
+
+            if (!label) {
+              label = cleanBranch || branch;
+            }
+
+            // 6️⃣ Construction du titre
+            const parts = [];
+            if (num) parts.push(`[#${num}]`);
+            if (prefix) parts.push(prefix);
+            if (label) parts.push(label);
+
+            const newTitle = parts.join(" - ").trim();
+
+            // 7️⃣ Mise à jour du titre si différent
             if (newTitle && newTitle !== origTitle) {
               await github.rest.pulls.update({
                 owner: context.repo.owner,
