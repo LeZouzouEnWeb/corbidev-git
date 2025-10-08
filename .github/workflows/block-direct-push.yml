@@ -2,10 +2,7 @@ name: 🚫 Blocage des push directs sur branches protegees
 
 on:
   push:
-    branches:
-      - develop
-      - homol
-      - main
+    branches: [ main, homol, develop ]
 
 # Pas de permissions spéciales nécessaires
 permissions: {}
