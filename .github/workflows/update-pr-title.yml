@@ -1,4 +1,4 @@
-name: 🔄 Mettre à jour le titre de la PR
+name: 🔄 Mettre a jour le titre de la PR
 
 on:
   pull_request:

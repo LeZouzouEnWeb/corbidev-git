@@ -1,4 +1,4 @@
-name: 🔗 Lier les tickets à la PR
+name: 🔗 Lier les tickets a la PR
 
 on:
   pull_request:

@@ -1,4 +1,4 @@
-name: 🗑️ Supprimer la branche après fusion
+name: 🗑️ Supprimer la branche apres fusion
 
 on:
   pull_request:

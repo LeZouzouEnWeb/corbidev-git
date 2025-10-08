@@ -1,4 +1,4 @@
-name: 🚫 Blocage des push directs sur branches protégées
+name: 🚫 Blocage des push directs sur branches protegees
 
 on:
   push:

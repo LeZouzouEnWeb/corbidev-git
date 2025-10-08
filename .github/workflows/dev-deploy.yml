@@ -1,4 +1,4 @@
-name: 🚀 Déploiement Dev
+name: 🚀 Deploiement Dev
 
 on:
   pull_request:
@@ -52,7 +52,7 @@ jobs:
         run: |
           norm() { printf "%s" "$1" | sed -e 's#//*#/#g' -e 's#^/##' -e 's#/$##'; }
           _remote="$(norm "$REMOTE_CHEMIN")"
-          _env="$(norm "$REMOTE_ENV")"  
+          _env="$(norm "$REMOTE_ENV")"
           _global="$(norm "$ADRESSE_GLOBAL")"
           _local="$(norm "$ADRESSE_LOCAL")"
 
