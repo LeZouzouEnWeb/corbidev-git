@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Vérifier les variables requises
+      - name: Verifier les variables requises
         run: |
           miss=0
           for v in REMOTE_CHEMIN ADRESSE_GLOBAL ADRESSE_LOCAL; do
@@ -50,11 +50,11 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Vérifier connexion SSH
+      - name: Verifier connexion SSH
         run: |
           ssh -o BatchMode=yes -o StrictHostKeyChecking=no ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }} "echo 'Connexion SSH OK'"
 
-      - name: Vérifier/Créer le dossier distant
+      - name: Verifier/Creer le dossier distant
         run: |
           REMOTE_PATH="${{ steps.path.outputs.REMOTE_PATH }}"
           echo "Vérification du dossier : $REMOTE_PATH"

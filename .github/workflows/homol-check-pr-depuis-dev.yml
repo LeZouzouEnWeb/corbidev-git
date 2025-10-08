@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🔎 Contrôle de la branche source
+      - name: 🔎 Controle de la branche source
         id: check
         run: |
           echo "### Contrôle PR" >> "$GITHUB_STEP_SUMMARY"

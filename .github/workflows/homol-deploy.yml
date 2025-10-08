@@ -24,7 +24,7 @@ env:
 
 jobs:
   mirror_homol_to_main:
-    name: 🔁 Mirror develop → homol
+    name: 🔁 Miroir develop → homol
     if: >
       github.event.pull_request.merged == true &&
       github.event.pull_request.base.ref == 'homol' &&
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Vérifier variables requises
+      - name: Verifier variables requises
         shell: bash
         run: |
           miss=0
@@ -68,10 +68,10 @@ jobs:
           done
           [ "$miss" -eq 0 ] || exit 1
 
-      - name: Récupérer le code
+      - name: Recuperer le code
         uses: actions/checkout@v4
 
-      - name: Construire le chemin distant normalisé (sans création)
+      - name: Construire le chemin distant normalise (sans creation)
         id: path
         shell: bash
         run: |
@@ -88,24 +88,24 @@ jobs:
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_OUTPUT"
           echo "::notice title=REMOTE_PATH::$REMOTE_PATH"
 
-      - name: Préparer l’agent SSH
+      - name: Preparer l’agent SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
 
-      - name: Ajout hôte dans known_hosts
+      - name: Ajout hote dans known_hosts
         shell: bash
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -p "${SFTP_PORT:-22}" "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Vérifier la connexion SSH
+      - name: Verifier la connexion SSH
         shell: bash
         run: |
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -p "${SFTP_PORT:-22}" "$SFTP_USER@$SFTP_HOST" "echo 'Connexion SSH OK'"
 
-      - name: Déployer les fichiers (rsync avec .rsync-ignore si présent)
+      - name: Deployer les fichiers (rsync avec .rsync-ignore si present)
         shell: bash
         run: |
           REMOTE_PATH="${{ steps.path.outputs.REMOTE_PATH }}"
