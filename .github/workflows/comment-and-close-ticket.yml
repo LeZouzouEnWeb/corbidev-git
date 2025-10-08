@@ -1,4 +1,4 @@
-name: 📝 Comment commits on ticket and close
+name: 📝 Commenter les commits sur le ticket puis le cloturer
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ jobs:
       issues: write           # commenter et fermer l'issue
 
     steps:
-      - name: Comment commits on related ticket then close it
+      - name: Commenter les commits puis cloturer le ticket
         uses: actions/github-script@v7
         with:
           script: |

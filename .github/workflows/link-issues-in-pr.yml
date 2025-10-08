@@ -1,4 +1,4 @@
-name: 🔗 Link issues to PR
+name: 🔗 Lier les tickets a la PR
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ jobs:
   link:
     runs-on: ubuntu-latest
     steps:
-      - name: Detect & link issues in PR body
+      - name: Detecter et lier les tickets dans la PR
         uses: actions/github-script@v7
         with:
           script: |
@@ -23,7 +23,7 @@ jobs:
 
             // --- Regex robustes, sans variables d'env ni groupes nommés ---
             // A. Formats "ticket-123", "ticket 123", "ticket_123" (branche & titre)
-            const reTicketInBranch = /(?:^|\/)ticket[-_ ]?(\d+)(?=\/|$)/ig;
+            const reTicketInBranch = /(?:^|[\\/_-])ticket[-_ ]?(\d+)(?=$|[^0-9])/ig;
             const reTicketInText   = /\bticket[-_ ]?(\d+)\b/ig;
 
             // B. Liens #123, clés PROJ-123, et fermetures "fix/close/resolve #123"
