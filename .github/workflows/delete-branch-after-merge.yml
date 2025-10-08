@@ -1,4 +1,4 @@
-name: 🗑️ delete branch after merge
+name: 🗑️ Supprimer la branche après fusion
 
 on:
   pull_request:

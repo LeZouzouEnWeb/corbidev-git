@@ -1,4 +1,4 @@
-name: 📝 Comment commits on ticket and close
+name: 📝 Commenter les commits sur le ticket puis le cloturer
 
 on:
   pull_request:

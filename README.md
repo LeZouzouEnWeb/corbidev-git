@@ -13,44 +13,45 @@ _Généré le 2025-10-08 19:06:19 — synthèse des statuts ci-dessous._
 
 **Branches principales**
 
-| Branche | Checks                                                                                            | Dernier commit                                                                                           | Server Check                                                                                                                                                                                                                                                 | Déploiement                                                                                                                                                                                                                       |
+| Branche | Checks                                                                                            | Dernier commit                                                                                           | Vérification serveur                                                                                                                                                                                                                                         | Déploiement                                                                                                                                                                                                                       |
 | ------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| develop | ![checks develop](https://img.shields.io/github/checks-status/LeZouzouEnWeb/corbidev-git/develop) | ![last commit develop](https://img.shields.io/github/last-commit/LeZouzouEnWeb/corbidev-git/develop.svg) | [![Dev Server Check (PR)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/dev-server-check-pr.yml/badge.svg?branch=develop)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/dev-server-check-pr.yml?query=branch%3Adevelop) | [![Dev Deploy](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/dev-deploy.yml/badge.svg?branch=develop)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/dev-deploy.yml?query=branch%3Adevelop)   |
-| homol   | ![checks homol](https://img.shields.io/github/checks-status/LeZouzouEnWeb/corbidev-git/homol)     | ![last commit homol](https://img.shields.io/github/last-commit/LeZouzouEnWeb/corbidev-git/homol.svg)     | [![Homol Server Check](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-server-check-pr.yml/badge.svg?branch=homol)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-server-check-pr.yml?query=branch%3Ahomol)    | [![Homol Deploy](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-deploy.yml/badge.svg?branch=homol)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-deploy.yml?query=branch%3Ahomol) |
-| main    | ![checks main](https://img.shields.io/github/checks-status/LeZouzouEnWeb/corbidev-git/main)       | ![last commit main](https://img.shields.io/github/last-commit/LeZouzouEnWeb/corbidev-git/main.svg)       | [![Prod Server Check](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/prod-server-check-pr.yml/badge.svg?branch=main)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/prod-server-check-pr.yml?query=branch%3Amain)         | [![Prod Deploy](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/prod-deploy.yml/badge.svg?branch=main)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/prod-deploy.yml?query=branch%3Amain)      |
+| develop | ![checks develop](https://img.shields.io/github/checks-status/LeZouzouEnWeb/corbidev-git/develop) | ![last commit develop](https://img.shields.io/github/last-commit/LeZouzouEnWeb/corbidev-git/develop.svg) | [![Vérification serveur Dev (PR)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/dev-server-check-pr.yml/badge.svg?branch=develop)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/dev-server-check-pr.yml?query=branch%3Adevelop) | [![Déploiement Dev](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/dev-deploy.yml/badge.svg?branch=develop)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/dev-deploy.yml?query=branch%3Adevelop)   |
+| homol   | ![checks homol](https://img.shields.io/github/checks-status/LeZouzouEnWeb/corbidev-git/homol)     | ![last commit homol](https://img.shields.io/github/last-commit/LeZouzouEnWeb/corbidev-git/homol.svg)     | [![Vérification serveur Homol](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-server-check-pr.yml/badge.svg?branch=homol)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-server-check-pr.yml?query=branch%3Ahomol)    | [![Déploiement Homol](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-deploy.yml/badge.svg?branch=homol)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-deploy.yml?query=branch%3Ahomol) |
+| main    | ![checks main](https://img.shields.io/github/checks-status/LeZouzouEnWeb/corbidev-git/main)       | ![last commit main](https://img.shields.io/github/last-commit/LeZouzouEnWeb/corbidev-git/main.svg)       | [![Vérification serveur Prod](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/prod-server-check-pr.yml/badge.svg?branch=main)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/prod-server-check-pr.yml?query=branch%3Amain)         | [![Déploiement Prod](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/prod-deploy.yml/badge.svg?branch=main)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/prod-deploy.yml?query=branch%3Amain)      |
 
 **Workflows CI/CD**
 
-[![CodeQL](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/CodeQL.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/CodeQL.yml)
+[![Analyse CodeQL](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/CodeQL.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/CodeQL.yml) [![Blocage des push directs sur branches protégées](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/block-direct-push.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/block-direct-push.yml)
 
 ---
 
 Develop :
 
-[![Update PR title](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/update-pr-title.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/update-pr-title.yml) [![Link issues to PR](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/link-issues-in-pr.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/link-issues-in-pr.yml) [![Comment commits on ticket and close](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/comment-and-close-ticket.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/comment-and-close-ticket.yml) [![Delete branch after merge](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/delete-branch-after-merge.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/delete-branch-after-merge.yml)
+[![Mettre à jour le titre de la PR](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/update-pr-title.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/update-pr-title.yml) [![Lier les tickets à la PR](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/link-issues-in-pr.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/link-issues-in-pr.yml) [![Commenter les commits sur le ticket puis le cloturer](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/comment-and-close-ticket.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/comment-and-close-ticket.yml) [![Supprimer la branche après fusion](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/delete-branch-after-merge.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/delete-branch-after-merge.yml)
 
 ---
 
 Homol et Main :
 
-[![PR develop → homol](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-check-pr-depuis-dev.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-check-pr-depuis-dev.yml)
+[![PR de develop vers homol](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-check-pr-depuis-dev.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/homol-check-pr-depuis-dev.yml)
 
 **Correspondance des badges**
 
 | Workflow file                                   | Badge label                         |
 | ----------------------------------------------- | ----------------------------------- |
-| .github/workflows/CodeQL.yml                    | CodeQL                              |
-| .github/workflows/dev-server-check-pr.yml       | Dev Server Check (PR)               |
-| .github/workflows/homol-server-check-pr.yml     | Homol Server Check                  |
-| .github/workflows/prod-server-check-pr.yml      | Prod Server Check                   |
-| .github/workflows/dev-deploy.yml                | Dev Deploy                          |
-| .github/workflows/homol-deploy.yml              | Homol Deploy                        |
-| .github/workflows/prod-deploy.yml               | Prod Deploy                         |
-| .github/workflows/homol-check-pr-depuis-dev.yml | PR develop → homol                  |
-| .github/workflows/update-pr-title.yml           | Update PR title                     |
-| .github/workflows/delete-branch-after-merge.yml | Delete branch after merge           |
-| .github/workflows/link-issues-in-pr.yml         | Link issues to PR                   |
-| .github/workflows/comment-and-close-ticket.yml  | Comment commits on ticket and close |
+| .github/workflows/CodeQL.yml                    | 🔣 Analyse CodeQL                   |
+| .github/workflows/block-direct-push.yml         | 🚫 Blocage des push directs sur branches protégées |
+| .github/workflows/dev-server-check-pr.yml       | 🔳 Vérification serveur Dev         |
+| .github/workflows/homol-server-check-pr.yml     | 🔳 Vérification serveur Homol       |
+| .github/workflows/prod-server-check-pr.yml      | 🔳 Vérification serveur Prod        |
+| .github/workflows/dev-deploy.yml                | 🚀 Déploiement Dev                  |
+| .github/workflows/homol-deploy.yml              | 🚀 Déploiement Homol                |
+| .github/workflows/prod-deploy.yml               | 🚀 Déploiement Prod                 |
+| .github/workflows/homol-check-pr-depuis-dev.yml | 🔒 PR de develop vers homol         |
+| .github/workflows/update-pr-title.yml           | 🔄 Mettre à jour le titre de la PR  |
+| .github/workflows/delete-branch-after-merge.yml | 🗑️ Supprimer la branche après fusion |
+| .github/workflows/link-issues-in-pr.yml         | 🔗 Lier les tickets à la PR         |
+| .github/workflows/comment-and-close-ticket.yml  | 📝 Commenter les commits sur le ticket puis le cloturer |
 
 <!-- BADGES:END -->
 
@@ -63,6 +64,7 @@ Homol et Main :
 - Copier/coller des commandes et fiches mémo avec accusé visuel et comptage local des usages.
 - API PHP sécurisée (`public/api/modules.php`) qui expose les données JSON en lecture seule.
 - Badges GitHub Actions dynamiques pour suivre l'état des branches `develop`, `homol` et `main`.
+- Workflow 🚫 Blocage des push directs sur branches protégées interdisant tout push direct sur les branches principales en dehors des acteurs autorisés (`web-flow`, bots GitHub, Dependabot).
 
 ## 🗂️ Structure des données
 

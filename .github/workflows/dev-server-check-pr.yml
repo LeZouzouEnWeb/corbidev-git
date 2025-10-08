@@ -1,4 +1,4 @@
-name: 🔳 Dev Server Check
+name: 🔳 Vérification serveur Dev
 
 on:
   pull_request:

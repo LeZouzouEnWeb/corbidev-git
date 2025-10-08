@@ -1,4 +1,4 @@
-name: 🔳 Homol Server Check
+name: 🔳 Vérification serveur Homol
 
 on:
   pull_request:

@@ -1,4 +1,4 @@
-name: 🔒 PR develop vers homol
+name: 🔒 PR de develop vers homol
 
 on:
   pull_request:

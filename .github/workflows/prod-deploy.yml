@@ -1,4 +1,4 @@
-name: 🚀 Prod Deploy
+name: 🚀 Déploiement Prod
 
 on:
   pull_request:

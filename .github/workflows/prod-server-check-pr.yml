@@ -1,4 +1,4 @@
-name: 🔳 Prod Server Check
+name: 🔳 Vérification serveur Prod
 
 on:
   pull_request:

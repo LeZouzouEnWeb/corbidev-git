@@ -1,4 +1,4 @@
-name: 🔗 Link issues to PR
+name: 🔗 Lier les tickets à la PR
 
 on:
   pull_request:

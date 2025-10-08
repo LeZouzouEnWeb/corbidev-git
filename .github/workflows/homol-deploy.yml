@@ -1,4 +1,4 @@
-name: 🚀 Homol Deploy
+name: 🚀 Déploiement Homol
 
 on:
   pull_request:
