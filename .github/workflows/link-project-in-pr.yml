@@ -1,0 +1,111 @@
+name: 🔗 Lier le projet a la PR
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  # nécessaire pour Projects (v2)
+  projects: write
+
+jobs:
+  link:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Link PR to issue and copy Projects
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const prNumber = pr.number;
+
+            // 1) extraire le numéro de ticket depuis titre, branche ou body
+            const title = pr.title || "";
+            const branch = pr.head?.ref || "";
+            const body = pr.body || "";
+
+            // Exemples acceptés : [#88], #88, ticket-88, ticket_88, ticket/88
+            const rxList = [
+              /\[#?(\d+)\]/i,
+              /(?:^|\s)#(\d+)(?:\s|$)/,
+              /ticket[-_\/]?(\d+)/i
+            ];
+            let ticket = null;
+            for (const rx of rxList) {
+              const m = title.match(rx) || branch.match(rx) || body.match(rx);
+              if (m && m[1]) { ticket = parseInt(m[1], 10); break; }
+            }
+            if (!ticket) {
+              core.setFailed("Aucun numéro de ticket trouvé dans le titre, la branche ou la description.");
+              return;
+            }
+
+            // 2) vérifier que l’issue existe
+            let issue;
+            try {
+              const { data } = await github.rest.issues.get({ owner, repo, issue_number: ticket });
+              issue = data;
+            } catch (e) {
+              core.setFailed(`Issue #${ticket} introuvable dans ${owner}/${repo}.`);
+              return;
+            }
+
+            // 3) Optionnel : s’assurer que la PR mentionne l’issue (mot-clé configurable)
+            const CLOSING_KEYWORD = process.env.PR_KEYWORD || "Closes"; // "Relates to" pour ne pas fermer auto
+            if (!new RegExp(`\\b(#${ticket})\\b`).test(body)) {
+              const newBody = (body ? body + "\n\n" : "") + `${CLOSING_KEYWORD} #${ticket}`;
+              await github.rest.pulls.update({ owner, repo, pull_number: prNumber, body: newBody });
+              core.info(`PR body mis à jour avec "${CLOSING_KEYWORD} #${ticket}".`);
+            }
+
+            // 4) Récupérer l’ID GraphQL de la PR et les Project(s) de l’issue
+            const query = `
+              query($owner:String!, $repo:String!, $prNumber:Int!, $issueNumber:Int!) {
+                repository(owner:$owner, name:$repo) {
+                  pullRequest(number:$prNumber) { id }
+                  issue(number:$issueNumber) {
+                    id
+                    projectsV2(first: 20) { nodes { id title } }
+                  }
+                }
+              }
+            `;
+            const qres = await github.graphql(query, { owner, repo, prNumber, issueNumber: ticket });
+            const prId = qres.repository.pullRequest?.id;
+            const projects = qres.repository.issue?.projectsV2?.nodes || [];
+            if (!prId) {
+              core.setFailed("Impossible de récupérer l’ID de la PR.");
+              return;
+            }
+            if (projects.length === 0) {
+              core.info(`L’issue #${ticket} n’est dans aucun Project v2 ; rien à copier.`);
+              return;
+            }
+
+            // 5) Ajouter la PR à chacun des mêmes Projects v2
+            const mutation = `
+              mutation($projectId:ID!, $contentId:ID!) {
+                addProjectV2ItemById(input:{projectId:$projectId, contentId:$contentId}) {
+                  item { id }
+                }
+              }
+            `;
+            for (const p of projects) {
+              try {
+                await github.graphql(mutation, { projectId: p.id, contentId: prId });
+                core.info(`PR ajoutée au Project: ${p.title}`);
+              } catch (err) {
+                // si déjà présent, GitHub renvoie souvent une erreur bénigne ; on logge en info
+                core.warning(`Déjà présent ou non ajoutée dans "${p.title}" : ${err.message}`);
+              }
+            }
+
+            core.notice(`PR #${prNumber} liée à #${ticket} et copiée vers ${projects.length} project(s).`);
+          env:
+            # "Closes" fermera automatiquement l’issue à la fusion. Mettre "Relates to" pour éviter cela.
+            PR_KEYWORD: Closes
