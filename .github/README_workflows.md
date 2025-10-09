@@ -18,7 +18,7 @@ Ce dépôt fournit un jeu complet de workflows GitHub Actions pour piloter les d
 | 📝 Commenter les commits sur le ticket puis le cloturer | `.github/workflows/comment-and-close-ticket.yml`  | PR → `develop` (merged)                 | Commente et ferme l'issue liée en listant les commits mergés.      |
 | 🗑️ Supprimer la branche après fusion   | `.github/workflows/delete-branch-after-merge.yml` | Toute PR fermée                         | Supprime automatiquement la branche source (hors liste interdite). |
 | 🔣 Analyse CodeQL                      | `.github/workflows/CodeQL.yml`                    | Push/PR `main`,`homol`,`develop` + cron | Analyse statique JS/TS si du code est détecté.                     |
-| 🚫 Blocage des push directs sur branches protégées | `.github/workflows/block-direct-push.yml`         | Push `develop`,`homol`,`main`           | Refuse tout push direct hors `web-flow`/bots autorisés.            |
+|   |          |            |            |
 
 > ℹ️ Les intitulés affichés dans GitHub correspondent aux noms de jobs (ex. `Vérification connexion & dossier serveur dev`). Ouvre une PR de test pour qu'ils apparaissent avant de les marquer comme checks obligatoires.
 
@@ -32,7 +32,6 @@ Les fichiers doivent être présents dans le dossier `.github/workflows` de ton 
    ├─ CodeQL.yml
    ├─ comment-and-close-ticket.yml
    ├─ delete-branch-after-merge.yml
-   ├─ block-direct-push.yml
    ├─ dev-deploy.yml
    ├─ dev-server-check-pr.yml
    ├─ homol-check-pr-depuis-dev.yml
@@ -86,12 +85,13 @@ Ces workflows n'utilisent plus FTPS ; inutile de définir `FTP_SERVER`, `FTP_US
 ## Automatisations transverses
 
 - **🗑️ Supprimer la branche après fusion** : supprime la branche source d'une PR fusionnée, sauf si elle figure dans `FORBIDDEN_BRANCHES` (par défaut `develop,homol`).
-- **🚫 Blocage des push directs sur branches protégées** : échoue immédiatement si un push direct vise `develop`, `homol` ou `main` (tolère `web-flow`, `github-actions[bot]`, `dependabot[bot]`).
+
 - **🔣 Analyse CodeQL** : lance l'analyse CodeQL JS/TS sur chaque push/PR et hebdomadairement (`cron`). Le job s'exécute uniquement si des fichiers JS/TS existent.
 
 ## Protection de branches recommandée
 
 1. **Settings → Branches → Branch protection rules → New rule**
+
 2. Règles suggérées :
    - `develop` : activer _Require a pull request before merging_, puis marquer comme checks obligatoires `Vérification connexion & dossier serveur dev` et (si pertinent) `codeql`.
    - `homol` : même configuration, ajouter `Vérification connexion & dossier serveur homol` et `Vérifier la source de la PR` (job du workflow `homol-check-pr-depuis-dev`).
