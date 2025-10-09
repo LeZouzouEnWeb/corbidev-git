@@ -21,7 +21,7 @@ _Généré le 2025-10-08 19:06:19 — synthèse des statuts ci-dessous._
 
 **Workflows CI/CD**
 
-[![Analyse CodeQL](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/CodeQL.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/CodeQL.yml) [![Blocage des push directs sur branches protégées](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/block-direct-push.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/block-direct-push.yml)
+[![Analyse CodeQL](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/CodeQL.yml/badge.svg)](https://github.com/LeZouzouEnWeb/corbidev-git/actions/workflows/CodeQL.yml)
 
 ---
 
