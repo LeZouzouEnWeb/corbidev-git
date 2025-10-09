@@ -8,8 +8,7 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
-  # nécessaire pour Projects (v2)
-  projects: write
+  repository-projects: write  # ✅ clé valide (évite "Unexpected value 'projects'")
 
 jobs:
   link:
@@ -17,6 +16,8 @@ jobs:
     steps:
       - name: Link PR to issue and copy Projects
         uses: actions/github-script@v7
+        env:                     # ✅ env au niveau du step (pas sous `with`)
+          PR_KEYWORD: Closes
         with:
           script: |
             const pr = context.payload.pull_request;
@@ -55,8 +56,8 @@ jobs:
               return;
             }
 
-            // 3) Optionnel : s’assurer que la PR mentionne l’issue (mot-clé configurable)
-            const CLOSING_KEYWORD = process.env.PR_KEYWORD || "Closes"; // "Relates to" pour ne pas fermer auto
+            // 3) S’assurer que la PR mentionne l’issue (mot-clé configurable)
+            const CLOSING_KEYWORD = process.env.PR_KEYWORD || "Closes";
             if (!new RegExp(`\\b(#${ticket})\\b`).test(body)) {
               const newBody = (body ? body + "\n\n" : "") + `${CLOSING_KEYWORD} #${ticket}`;
               await github.rest.pulls.update({ owner, repo, pull_number: prNumber, body: newBody });
@@ -100,12 +101,8 @@ jobs:
                 await github.graphql(mutation, { projectId: p.id, contentId: prId });
                 core.info(`PR ajoutée au Project: ${p.title}`);
               } catch (err) {
-                // si déjà présent, GitHub renvoie souvent une erreur bénigne ; on logge en info
                 core.warning(`Déjà présent ou non ajoutée dans "${p.title}" : ${err.message}`);
               }
             }
 
             core.notice(`PR #${prNumber} liée à #${ticket} et copiée vers ${projects.length} project(s).`);
-          env:
-            # "Closes" fermera automatiquement l’issue à la fusion. Mettre "Relates to" pour éviter cela.
-            PR_KEYWORD: Closes
