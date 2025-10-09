@@ -8,101 +8,63 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
-  repository-projects: write  # ✅ clé valide (évite "Unexpected value 'projects'")
+  # pas besoin de repository-projects: on passe par un PAT
 
 jobs:
   link:
     runs-on: ubuntu-latest
     steps:
-      - name: Link PR to issue and copy Projects
+      - name: Detect ticket and ensure PR references it
+        id: detect
         uses: actions/github-script@v7
-        env:                     # ✅ env au niveau du step (pas sous `with`)
+        env:
           PR_KEYWORD: Closes
         with:
           script: |
             const pr = context.payload.pull_request;
-            const owner = context.repo.owner;
-            const repo  = context.repo.repo;
-            const prNumber = pr.number;
+            const {owner, repo} = context.repo;
 
-            // 1) extraire le numéro de ticket depuis titre, branche ou body
             const title = pr.title || "";
             const branch = pr.head?.ref || "";
-            const body = pr.body || "";
+            const body   = pr.body || "";
 
-            // Exemples acceptés : [#88], #88, ticket-88, ticket_88, ticket/88
-            const rxList = [
+            const patterns = [
               /\[#?(\d+)\]/i,
-              /(?:^|\s)#(\d+)(?:\s|$)/,
+              /(?:^|\s)#(\d+)(?=\s|$)/,
               /ticket[-_\/]?(\d+)/i
             ];
             let ticket = null;
-            for (const rx of rxList) {
+            for (const rx of patterns) {
               const m = title.match(rx) || branch.match(rx) || body.match(rx);
-              if (m && m[1]) { ticket = parseInt(m[1], 10); break; }
+              if (m) { ticket = parseInt(m[1],10); break; }
             }
-            if (!ticket) {
-              core.setFailed("Aucun numéro de ticket trouvé dans le titre, la branche ou la description.");
-              return;
+            if (!ticket) core.setFailed("Aucun numéro de ticket détecté (titre/branche/body).");
+
+            // Vérifier que l'issue existe
+            await github.rest.issues.get({ owner, repo, issue_number: ticket });
+
+            // Garantir le lien PR -> issue
+            const kw = process.env.PR_KEYWORD || "Closes";
+            if (!new RegExp(`\\b#${ticket}\\b`).test(body)) {
+              const newBody = (body ? body + "\n\n" : "") + `${kw} #${ticket}`;
+              await github.rest.pulls.update({ owner, repo, pull_number: pr.number, body: newBody });
+              core.info(`PR body mis à jour avec "${kw} #${ticket}".`);
             }
 
-            // 2) vérifier que l’issue existe
-            let issue;
-            try {
-              const { data } = await github.rest.issues.get({ owner, repo, issue_number: ticket });
-              issue = data;
-            } catch (e) {
-              core.setFailed(`Issue #${ticket} introuvable dans ${owner}/${repo}.`);
-              return;
-            }
+            const issueUrl = `https://github.com/${owner}/${repo}/issues/${ticket}`;
+            core.setOutput("issue_url", issueUrl);
+            core.setOutput("pr_url", pr.html_url);
 
-            // 3) S’assurer que la PR mentionne l’issue (mot-clé configurable)
-            const CLOSING_KEYWORD = process.env.PR_KEYWORD || "Closes";
-            if (!new RegExp(`\\b(#${ticket})\\b`).test(body)) {
-              const newBody = (body ? body + "\n\n" : "") + `${CLOSING_KEYWORD} #${ticket}`;
-              await github.rest.pulls.update({ owner, repo, pull_number: prNumber, body: newBody });
-              core.info(`PR body mis à jour avec "${CLOSING_KEYWORD} #${ticket}".`);
-            }
+      - name: ➕ Add ISSUE to CORBIDEV
+        uses: actions/add-to-project@v1
+        with:
+          project-url: https://github.com/users/LeZouzouEnWeb/projects/4
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          content-id: ${{ steps.detect.outputs.issue_url }}
 
-            // 4) Récupérer l’ID GraphQL de la PR et les Project(s) de l’issue
-            const query = `
-              query($owner:String!, $repo:String!, $prNumber:Int!, $issueNumber:Int!) {
-                repository(owner:$owner, name:$repo) {
-                  pullRequest(number:$prNumber) { id }
-                  issue(number:$issueNumber) {
-                    id
-                    projectsV2(first: 20) { nodes { id title } }
-                  }
-                }
-              }
-            `;
-            const qres = await github.graphql(query, { owner, repo, prNumber, issueNumber: ticket });
-            const prId = qres.repository.pullRequest?.id;
-            const projects = qres.repository.issue?.projectsV2?.nodes || [];
-            if (!prId) {
-              core.setFailed("Impossible de récupérer l’ID de la PR.");
-              return;
-            }
-            if (projects.length === 0) {
-              core.info(`L’issue #${ticket} n’est dans aucun Project v2 ; rien à copier.`);
-              return;
-            }
-
-            // 5) Ajouter la PR à chacun des mêmes Projects v2
-            const mutation = `
-              mutation($projectId:ID!, $contentId:ID!) {
-                addProjectV2ItemById(input:{projectId:$projectId, contentId:$contentId}) {
-                  item { id }
-                }
-              }
-            `;
-            for (const p of projects) {
-              try {
-                await github.graphql(mutation, { projectId: p.id, contentId: prId });
-                core.info(`PR ajoutée au Project: ${p.title}`);
-              } catch (err) {
-                core.warning(`Déjà présent ou non ajoutée dans "${p.title}" : ${err.message}`);
-              }
-            }
-
-            core.notice(`PR #${prNumber} liée à #${ticket} et copiée vers ${projects.length} project(s).`);
+      - name: ➕ Add PR to CORBIDEV
+        uses: actions/add-to-project@v1
+        with:
+          project-url: https://github.com/users/LeZouzouEnWeb/projects/4
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          content-id: ${{ steps.detect.outputs.pr_url }}
