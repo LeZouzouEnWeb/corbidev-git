@@ -1,0 +1,9 @@
+name: Repository introduction
+uses: lowlighter/metrics@latest
+with:
+  filename: metrics.plugin.introduction.repository.svg
+  token: ${{ secrets.METRICS_TOKEN }}
+  template: repository
+  repo: metrics
+  base: header
+  plugin_introduction: yes
